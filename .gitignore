@@ -2,3 +2,6 @@ node_modules/
 .ouroboros/
 target/
 *.log
+.env
+.env.*
+!.env.example
