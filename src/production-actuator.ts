@@ -16,6 +16,13 @@ function shell(args: string[], cwd: string): string {
   return output;
 }
 
+// Non-throwing variant for commands whose non-zero exit is not fatal
+// (e.g. `git commit` when there is nothing to commit).
+function shellSoft(args: string[], cwd: string): string {
+  const result = spawnSync(args, { cwd, stdout: "pipe", stderr: "pipe" });
+  return `${new TextDecoder().decode(result.stdout)}${new TextDecoder().decode(result.stderr)}`.trim();
+}
+
 function diagnosisLine(output: string): string {
   return output.split("\n").find(line => line.startsWith("DIAGNOSIS:"))?.slice(11).trim()
     ?? output.split("\n").find(Boolean)?.slice(0, 200)
@@ -33,7 +40,7 @@ export function createProductionActuator(options: ProductionActuatorOptions): Ac
         { allowTools: true, maxTurns: 40, cwd: targetDir },
       );
       shell(["git", "add", "-A"], targetDir);
-      shell(["git", "commit", "-m", "waywright: implement selected direction"], targetDir);
+      shellSoft(["git", "commit", "-m", "waywright: implement selected direction"], targetDir);
       shell(["git", "push", "-u", "origin", branch], targetDir);
       return branch;
     },
@@ -58,7 +65,9 @@ export function createProductionActuator(options: ProductionActuatorOptions): Ac
       );
       const summary = diagnosisLine(output);
       shell(["git", "add", "-A"], targetDir);
-      shell(["git", "commit", "-m", `waywright: self-correct ${iteration} — ${summary.slice(0, 60)}`], targetDir);
+      // --allow-empty: a correction that fixed nothing in-tree (e.g. a flaky/env
+      // failure) still advances the branch so the next build re-runs cleanly.
+      shellSoft(["git", "commit", "--allow-empty", "-m", `waywright: self-correct ${iteration} — ${summary.slice(0, 60)}`], targetDir);
       shell(["git", "push"], targetDir);
       return summary;
     },
