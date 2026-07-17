@@ -8,5 +8,9 @@
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "scripts": {
+    "test": "bun test tests/core.test.ts",
+    "teach": "bun extractors/pr/extract.ts"
   }
 }

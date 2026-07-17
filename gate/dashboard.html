@@ -331,7 +331,7 @@ function renderDetail(){
   } else if(selectedPhase==="teach"){
     body = `
       <div class="row"><span class="rk">the idea</span><span class="rv">machine-green isn't done. <b>done is when the human understands what merged.</b></span></div>
-      <div class="row"><span class="rk">how</span><span class="rv">post-merge, PR #2 is fed to <b>human-mem</b> (${linkify("https://github.com/irresi/human-mem")}) — an external tool like <code>gh</code> — which turns the diff into an interactive comic episode</span></div>
+      <div class="row"><span class="rk">how</span><span class="rv">post-merge, PR #2 is fed to this project's <b>teach pipeline</b> (<code>extractors/pr</code>) — it drives <code>gh</code> to gather the diff and renders it into an interactive comic episode</span></div>
       <div class="row"><span class="rk">why</span><span class="rv">AI code you don't understand is a liability — this repays the cognitive debt in the same loop that created it</span></div>
       <div class="epwrap"><div class="epbar">generated episode — <b>“The Emoji That Counted as 1.4 Characters”</b> <a href="/episode" target="_blank">open ↗</a></div>
         <iframe class="ep" src="/episode" title="human-mem episode"></iframe></div>`;

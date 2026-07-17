@@ -19,12 +19,13 @@ TARGET_DIR   ?= $(HOME)/codes/openclaw
 STEAL_REPO   ?= irresi/hermes-agent
 STATE        := .ouroboros/state.json
 PROBES       := .ouroboros/probes.json
+PR           ?= 2
 GOAL         ?= find real bugs in openclaw, learn from how hermes-agent does it
 
 # most-recent Zero run id, pulled live (no ID to memorize)
 LAST_RUN = $$(zero runs --json --limit 1 2>/dev/null | python3 -c 'import sys,json;print(json.load(sys.stdin)["runs"][0]["uid"])')
 
-.PHONY: help reset probes gate zero-receipt zero-what zero-runs zero-wallet serve open demo
+.PHONY: help reset probes gate zero-receipt zero-what teach zero-runs zero-wallet serve open demo
 
 help:
 	@echo "Waywright demo targets:"
@@ -57,6 +58,11 @@ zero-receipt:
 ## what capability was bought (full spec)
 zero-what:
 	@zero get javascript-node-js-linter-v8-static-analysis-e19fa853
+
+## LIVE teach: turn a merged PR into a comic episode (this project's own pipeline)
+teach:
+	@echo "▶ teaching: PR #$(PR) → comic episode via extractors/pr…"
+	bun extractors/pr/extract.ts irresi/openclaw $(PR) --out-dir episodes
 
 ## recent x402 charges (receipt list)
 zero-runs:

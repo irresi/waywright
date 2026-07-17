@@ -7,7 +7,7 @@ const PORT = Number(process.env.GATE_PORT ?? 8081);
 const MAX_ITERATIONS_ALLOWED = Number(process.env.GATE_MAX_ITER ?? 3);
 const STATE_FILE = process.env.OUROBOROS_STATE ?? ".ouroboros/state.json";
 const PROBES_FILE = process.env.PROBE_OUT ?? ".ouroboros/probes.json";
-const EPISODE_FILE = process.env.EPISODE_FILE ?? "";
+const EPISODE_FILE = process.env.EPISODE_FILE ?? decodeURIComponent(new URL("../episodes/openclaw-pr-2.html", import.meta.url).pathname);
 const DASHBOARD = decodeURIComponent(new URL("./dashboard.html", import.meta.url).pathname);
 
 // The audit trail IS the UI: the loop writes full state to STATE_FILE on every

@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://human-mem.dev/schemas/episode-spec/v0.json",
+  "title": "human-mem Episode Spec v0",
+  "description": "The intermediate artifact between the expensive AI extraction step and the cheap render/personalization step (decision D-009). One spec per narrative unit (PR, session, or incident). Renderers (browser viewer, VS Code webview, GitHub comment) consume this; the learner model sizes panels at assembly time.",
+  "type": "object",
+  "required": ["spec_version", "id", "source", "narrative_density", "title", "concepts", "panels", "quiz", "map_updates"],
+  "properties": {
+    "spec_version": { "const": "0.1" },
+    "id": {
+      "type": "string",
+      "description": "Stable episode id, e.g. 'hermes-agent-pr-62413'"
+    },
+    "source": {
+      "type": "object",
+      "description": "Provenance. Everything in the episode must be traceable here (no fabricated facts).",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["pr", "session", "issue", "commit-range"] },
+        "repo": { "type": "string" },
+        "pr_number": { "type": "integer" },
+        "issue_numbers": { "type": "array", "items": { "type": "integer" } },
+        "related_prs": { "type": "array", "items": { "type": "integer" } },
+        "session_id": { "type": "string" },
+        "merged_at": { "type": "string", "format": "date-time" },
+        "urls": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "narrative_density": {
+      "enum": ["long-form", "four-panel", "map-update-only"],
+      "description": "Grading per plan.md; decides which renderer template applies (open question Q-4 owns the classifier)."
+    },
+    "title": { "type": "string", "description": "Episode title, story-like, no clickbait lies." },
+    "logline": { "type": "string", "description": "One-sentence hook shown in the feed." },
+    "concepts": {
+      "type": "array",
+      "description": "Concepts this episode exercises. Renderer joins these against the learner-model exposure ledger to decide intro-panel depth (D-005). ids are lowercase slugs shared across episodes.",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "intro"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "intro": {
+            "type": "object",
+            "description": "Pre-training material (Mayer). Two depths; renderer picks by exposure.",
+            "required": ["one_liner", "full"],
+            "properties": {
+              "one_liner": { "type": "string", "description": "Compressed handle for shown>=3 readers." },
+              "full": { "type": "string", "description": "Character-intro panel text for first-timers. Analogy-first." }
+            }
+          },
+          "area": { "type": "string", "description": "Codebase area this concept lives in (learner-model unit Q-2, both axes recorded)." }
+        }
+      }
+    },
+    "cast": {
+      "type": "array",
+      "description": "People/agents as characters. Only include when they carry causal structure (seductive-details rule, goal.md).",
+      "items": {
+        "type": "object",
+        "required": ["id", "label", "role"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string", "description": "Display name, e.g. '@JoaoMarcos44'" },
+          "role": { "type": "string", "description": "Narrative role: 'hypothesis-A author', 'maintainer', 'the bug reporter'" }
+        }
+      }
+    },
+    "panels": {
+      "type": "array",
+      "description": "Ordered story beats. MUST follow the fixed grammar (D-006): incident -> hypotheses -> prediction -> reveal -> resolution -> teaser. Renderer maps beat kinds to visual templates.",
+      "items": {
+        "type": "object",
+        "required": ["beat", "body"],
+        "properties": {
+          "beat": {
+            "enum": ["cold-open", "incident", "cast-intro", "concept-intro", "investigation", "hypothesis", "prediction", "reveal", "code-walk", "resolution", "ratification", "teaser"],
+            "description": "concept-intro panels are PLACEHOLDERS: renderer expands/collapses them per learner model. prediction panels MUST precede their reveal panel and be tap-gated in HTML (D-004)."
+          },
+          "speaker": { "type": "string", "description": "cast id, for speech-bubble attribution. Omit for narration." },
+          "concept_ref": { "type": "string", "description": "For concept-intro beats: which concepts[].id to expand here." },
+          "hypothesis_id": { "type": "string", "description": "For hypothesis beats: stable id referenced by prediction options and reveal." },
+          "body": { "type": "string", "description": "Panel text. Markdown-lite (bold, code spans). Everything factual must trace to source." },
+          "figure": {
+            "type": "object",
+            "description": "Optional intuition figure (dual coding). You emit STRUCTURED DATA ONLY — the renderer draws the SVG; never write SVG yourself. Pick the type matching the causal shape. Put figures on NARRATION panels (no speaker).",
+            "required": ["type"],
+            "properties": {
+              "type": { "enum": ["flow", "sequence", "compare", "architecture", "scene"] },
+              "caption": { "type": "string" },
+              "nodes": { "type": "array", "description": "flow: boxes.", "items": { "type": "object", "required": ["id", "label"], "properties": { "id": { "type": "string" }, "label": { "type": "string" } } } },
+              "edges": { "type": "array", "description": "flow/architecture: directed edges; kind:'fault' is the wrong path (red/dashed).", "items": { "type": "object", "required": ["from", "to"], "properties": { "from": { "type": "string" }, "to": { "type": "string" }, "label": { "type": "string" }, "kind": { "enum": ["normal", "fault"] } } } },
+              "steps": {
+                "type": "array",
+                "description": "sequence: ordered {label,fault?} events. scene: ordered animation beats (see actors).",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": { "type": "string", "description": "sequence step text" },
+                    "fault": { "type": "boolean", "description": "this is the breaking step / the moment it goes wrong" },
+                    "action": { "enum": ["appear", "type", "move", "flow", "flash", "vanish"], "description": "scene beat kind" },
+                    "actor": { "type": "string", "description": "scene: subject actor id (source for move/flow)" },
+                    "to": { "type": "string", "description": "scene: target actor id for move/flow" },
+                    "text": { "type": "string", "description": "scene: token text for type/move (e.g. the message)" },
+                    "note": { "type": "string", "description": "scene: one-line caption shown while this beat plays" }
+                  }
+                }
+              },
+              "before": { "type": "object", "description": "compare: pre-fix state.", "properties": { "title": { "type": "string" }, "items": { "type": "array", "items": { "type": "string" } } } },
+              "after": { "type": "object", "description": "compare: post-fix state.", "properties": { "title": { "type": "string" }, "items": { "type": "array", "items": { "type": "string" } } } },
+              "actors": {
+                "type": "array",
+                "description": "scene: positioned boxes on a 0..100 x 0..100 stage. x/y are the box CENTER in stage units.",
+                "items": { "type": "object", "required": ["id", "label", "x", "y"], "properties": { "id": { "type": "string" }, "label": { "type": "string" }, "x": { "type": "number" }, "y": { "type": "number" }, "kind": { "enum": ["frontend", "backend", "database", "cloud", "security", "bus", "external"] } } }
+              },
+              "layers": {
+                "type": "array",
+                "description": "architecture: horizontal layers of nodes (top→bottom).",
+                "items": { "type": "object", "required": ["nodes"], "properties": { "label": { "type": "string" }, "nodes": { "type": "array", "items": { "type": "object", "required": ["id", "label"], "properties": { "id": { "type": "string" }, "label": { "type": "string" }, "sub": { "type": "string" }, "kind": { "enum": ["frontend", "backend", "database", "cloud", "security", "bus", "external"] }, "touched": { "type": "boolean" } } } } } }
+              }
+            }
+          },
+          "code": {
+            "type": "object",
+            "description": "Optional code exhibit for code-walk beats.",
+            "properties": {
+              "lang": { "type": "string" },
+              "snippet": { "type": "string" },
+              "file": { "type": "string" },
+              "caption": { "type": "string", "description": "The literate-diff sentence: what this change means in the story." }
+            }
+          },
+          "prediction": {
+            "type": "object",
+            "description": "For prediction beats: the retrieval-forcing interaction. Fair-play rule: for beginner questions all clues must be in prior panels.",
+            "required": ["question", "options", "answer", "feedback"],
+            "properties": {
+              "question": { "type": "string" },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["id", "text"],
+                  "properties": {
+                    "id": { "type": "string" },
+                    "text": { "type": "string" },
+                    "maps_to_hypothesis": { "type": "string" }
+                  }
+                }
+              },
+              "answer": { "type": "string", "description": "option id. 'both'/'neither' style answers allowed as explicit options." },
+              "feedback": {
+                "type": "object",
+                "description": "Per-option feedback. Hypercorrection: wrong-answer feedback explains WHY the intuition fails, kindly.",
+                "additionalProperties": { "type": "string" }
+              },
+              "concept_ids": { "type": "array", "items": { "type": "string" }, "description": "Concepts this prediction measures (knowledge tracing)." }
+            }
+          }
+        }
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "description": "Design decisions surfaced for ratification (core-loop step 3). What was chosen, what was discarded, the trade-off.",
+      "items": {
+        "type": "object",
+        "required": ["chose", "over", "because"],
+        "properties": {
+          "chose": { "type": "string" },
+          "over": { "type": "string" },
+          "because": { "type": "string" }
+        }
+      }
+    },
+    "boundaries": {
+      "type": "array",
+      "description": "Boundaries & assumptions (situation-model element 3): where this change stops working.",
+      "items": { "type": "string" }
+    },
+    "quiz": {
+      "type": "array",
+      "description": "End-of-episode quiz, 3-5 items, medium difficulty, decision-mimicking (transfer-appropriate processing). Same option/feedback shape as prediction.",
+      "items": { "$ref": "#/properties/panels/items/properties/prediction" }
+    },
+    "map_updates": {
+      "type": "array",
+      "description": "What this episode adds to the accreting codebase map (series bible). Episode=why, map=shape.",
+      "items": {
+        "type": "object",
+        "required": ["area", "note"],
+        "properties": {
+          "area": { "type": "string", "description": "Map node, e.g. 'desktop/composer'" },
+          "note": { "type": "string", "description": "One line: what now exists there and why." }
+        }
+      }
+    },
+    "teaser": { "type": "string", "description": "Next-episode hook. Honest (points at a real open thread in the repo)." }
+  }
+}
