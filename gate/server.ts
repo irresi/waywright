@@ -7,6 +7,7 @@ const PORT = Number(process.env.GATE_PORT ?? 8081);
 const MAX_ITERATIONS_ALLOWED = Number(process.env.GATE_MAX_ITER ?? 3);
 const STATE_FILE = process.env.OUROBOROS_STATE ?? ".ouroboros/state.json";
 const PROBES_FILE = process.env.PROBE_OUT ?? ".ouroboros/probes.json";
+const EPISODE_FILE = process.env.EPISODE_FILE ?? "";
 const DASHBOARD = decodeURIComponent(new URL("./dashboard.html", import.meta.url).pathname);
 
 // The audit trail IS the UI: the loop writes full state to STATE_FILE on every
@@ -33,6 +34,24 @@ Bun.serve({
       const f = Bun.file(PROBES_FILE);
       const body = (await f.exists()) ? await f.text() : JSON.stringify({ probes: {} });
       return new Response(body, { headers: { "content-type": "application/json", ...CORS } });
+    }
+    // ── teach artifact: the human-mem comic episode for the merged PR ──
+    if (req.method === "GET" && url.pathname === "/episode") {
+      const f = EPISODE_FILE ? Bun.file(EPISODE_FILE) : null;
+      if (f && (await f.exists()))
+        return new Response(f, { headers: { "content-type": "text/html; charset=utf-8", ...CORS } });
+      return new Response("<!doctype html><body style='font:14px monospace;color:#8b98a5;background:#0d1117;padding:24px'>episode not generated yet — run the Teach step</body>",
+        { status: 404, headers: { "content-type": "text/html; charset=utf-8", ...CORS } });
+    }
+    // episode assets (images the comic references) — served from the episode's dir
+    if (req.method === "GET" && url.pathname.startsWith("/episode/") && EPISODE_FILE) {
+      const name = url.pathname.slice("/episode/".length);
+      if (!name.includes("/") && !name.includes("..")) {               // no traversal
+        const dir = EPISODE_FILE.slice(0, EPISODE_FILE.lastIndexOf("/"));
+        const asset = Bun.file(`${dir}/${name}`);
+        if (await asset.exists()) return new Response(asset, { headers: { ...CORS } });
+      }
+      return new Response("not found", { status: 404, headers: CORS });
     }
 
     // ── merge gate (unchanged) ──────────────────────────────────────

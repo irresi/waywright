@@ -69,7 +69,7 @@ zero-wallet:
 ## (re)start gate + dashboard on :8081
 serve:
 	@pkill -f "gate/server.ts" 2>/dev/null; sleep 1; \
-	set -a; source .env; set +a; export PROBE_OUT="$(PWD)/$(PROBES)"; \
+	set -a; source .env; set +a; export PROBE_OUT="$(PWD)/$(PROBES)" EPISODE_FILE="$(EPISODE)"; \
 	nohup bun run gate/server.ts >/tmp/waywright-gate.log 2>&1 & \
 	sleep 1; curl -s -o /dev/null -w "✓ gate + dashboard on $(BASE) (http %{http_code})\n" $(BASE)/
 

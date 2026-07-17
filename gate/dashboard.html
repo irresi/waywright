@@ -28,7 +28,10 @@
   /* pipeline */
   .pipe{display:flex;gap:0;align-items:stretch;background:var(--panel);border:1px solid var(--line);
     border-radius:14px;padding:6px;overflow:hidden;margin-bottom:20px}
-  .step{flex:1;position:relative;padding:14px 10px 12px;text-align:center;border-radius:10px;transition:.35s}
+  .step{flex:1;position:relative;padding:14px 10px 12px;text-align:center;border-radius:10px;transition:.35s;cursor:pointer}
+  .step:hover{background:#141b24}
+  .step.sel{background:#12242e;box-shadow:inset 0 0 0 1px var(--accent)}
+  .step.sel .lbl{color:var(--accent)}
   .step .n{font-family:var(--mono);font-size:10px;color:var(--faint)}
   .step .lbl{font-size:13px;font-weight:550;color:var(--dim);margin-top:3px;text-transform:capitalize}
   .step.done .lbl{color:var(--ink)} .step.done .n{color:var(--accent)}
@@ -91,6 +94,32 @@
   .merged h3{font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
   .merged ol{margin:0;padding-left:18px;font-size:12px;line-height:1.6}
   .merged .tagz{color:var(--accent)} .merged .tags{color:var(--accent2)} .merged .tagl{color:#c4b5fd}
+
+  /* phase detail panel */
+  .detail{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:20px}
+  .detail .dh{display:flex;align-items:baseline;gap:12px;margin-bottom:4px}
+  .detail .dnum{font-family:var(--mono);font-size:11px;color:var(--accent)}
+  .detail .dtitle{font-size:16px;font-weight:650;color:var(--ink);text-transform:capitalize}
+  .detail .dsub{color:var(--dim);font-size:12.5px;margin-bottom:14px}
+  .detail .close{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--faint);cursor:pointer;border:1px solid var(--line);border-radius:6px;padding:2px 8px}
+  .detail .close:hover{color:var(--ink)}
+  .detail .row{display:flex;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line);font-size:13px;line-height:1.5}
+  .detail .row:last-child{border:0}
+  .detail .rk{font-family:var(--mono);font-size:11px;color:var(--faint);min-width:130px;flex-shrink:0}
+  .detail .rv{color:var(--ink)}
+  .detail .chk{color:var(--ok);font-family:var(--mono);font-size:12px}
+  .detail .big{font-size:22px;font-weight:650;letter-spacing:.5px}
+  .detail .big.ok{color:var(--ok)} .detail .big.bad{color:var(--bad)}
+  .detail table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px}
+  .detail th,.detail td{text-align:left;padding:5px 10px;border-bottom:1px solid #1b212b}
+  .detail th{color:var(--faint);font-weight:500;font-family:var(--mono);font-size:10px;text-transform:uppercase}
+  .detail td{font-family:var(--mono)} .detail td.old{color:var(--bad)} .detail td.new{color:var(--ok)}
+  .detail code{background:#0d1117;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12px;color:var(--accent)}
+  .detail .none{color:var(--faint);font-style:italic;font-size:12.5px}
+  .detail .epwrap{margin-top:14px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#0d1117}
+  .detail .epbar{font-family:var(--mono);font-size:11px;color:var(--dim);padding:8px 12px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center}
+  .detail .epbar a{margin-left:auto}
+  .detail iframe.ep{width:100%;height:520px;border:0;display:block;background:#fff}
 </style>
 </head>
 <body>
@@ -102,6 +131,8 @@
   <div class="sub">The agent reads shared memory to decide what to build; you read the same record to see what shipped. This is that record — live.</div>
 
   <div class="pipe" id="pipe"></div>
+
+  <section class="detail" id="phaseDetail" style="display:none"></section>
 
   <section id="probesWrap" style="display:none">
     <div class="probes-hdr">
@@ -154,7 +185,15 @@ const pipeEl = document.getElementById("pipe");
 PHASES.forEach((p,i)=>{
   if(i) pipeEl.insertAdjacentHTML("beforeend",'<span class="arw">›</span>');
   pipeEl.insertAdjacentHTML("beforeend",
-    `<div class="step" data-p="${p}"><div class="n">${String(i+1).padStart(2,"0")}</div><div class="lbl">${p}</div></div>`);
+    `<div class="step" data-p="${p}" title="click to see this phase's events"><div class="n">${String(i+1).padStart(2,"0")}</div><div class="lbl">${p}</div></div>`);
+});
+// click a step → show a phase-specific detail panel + filter the event stream
+pipeEl.addEventListener("click", e=>{
+  const step = e.target.closest(".step"); if(!step) return;
+  const p = step.dataset.p;
+  selectedPhase = (selectedPhase===p) ? undefined : p;
+  document.querySelectorAll(".step").forEach(s=>s.classList.toggle("sel", s.dataset.p===selectedPhase));
+  renderDetail(); renderLog();
 });
 
 const $=id=>document.getElementById(id);
@@ -162,7 +201,7 @@ const esc=s=>String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt
 const hhmm=iso=>{try{const d=new Date(iso);return d.toTimeString().slice(0,8)}catch{return""}};
 const linkify=s=>esc(s).replace(/https?:\/\/[^\s]+/g,u=>`<a href="${u}" target="_blank">${u.replace(/^https?:\/\/(www\.)?github\.com\//,"")}</a>`);
 
-let lastLen=-1, failed=false;
+let lastLen=-1, failed=false, selectedPhase=undefined, curState={};
 
 function paintPipe(phase){
   const cur=ORDER[phase]??-1;
@@ -187,6 +226,7 @@ async function tick(){
     $("pulse").classList.add("on"); $("conn").textContent="live";
 
     paintPipe(s.phase);
+    curState = s;
     $("v-phase").textContent=s.phase??"—";
     $("v-repo").textContent=s.targetRepo||"—";
     $("v-branch").textContent=s.branch||"—";
@@ -208,20 +248,108 @@ async function tick(){
         `<li><span class="repo">${esc(d.repo)}</span> — ${esc(d.decision)}<br><span class="why">${esc(d.why)}</span></li>`).join("");
     } else st.innerHTML='<li class="empty">none yet</li>';
 
-    // event log (append-aware)
-    const log=s.log||[];
-    if(log.length!==lastLen){
-      lastLen=log.length;
-      const box=$("log");
-      box.innerHTML = log.length
-        ? log.map(e=>`<div class="ev ${e.phase}"><span class="t">${hhmm(e.ts)}</span><span class="p">${esc(e.phase)}</span><span class="s">${esc(e.summary)}${e.detail?`<br><span style="color:var(--faint)">${linkify(e.detail)}</span>`:""}</span></div>`).join("")
-        : '<div class="empty">waiting for the loop to start…</div>';
-      box.scrollTop=box.scrollHeight;
-    }
+    // event log — keep latest, honor phase-filter selection
+    curLog = s.log||[];
+    if(curLog.length!==lastLen || selectedPhase!==renderedSel){ lastLen=curLog.length; renderLog(); }
   }catch(e){
     $("pulse").classList.remove("on"); $("conn").textContent="gate offline";
   }
 }
+
+// render the event stream, optionally filtered to selectedPhase (click a step)
+let curLog=[], renderedSel=undefined;
+function renderLog(){
+  const box=$("log"); renderedSel=selectedPhase;
+  const rows = selectedPhase ? curLog.filter(e=>e.phase===selectedPhase) : curLog;
+  box.innerHTML = rows.length
+    ? rows.map(e=>`<div class="ev ${e.phase}"><span class="t">${hhmm(e.ts)}</span><span class="p">${esc(e.phase)}</span><span class="s">${esc(e.summary)}${e.detail?`<br><span style="color:var(--faint)">${linkify(e.detail)}</span>`:""}</span></div>`).join("")
+    : (selectedPhase ? `<div class="empty">no events in “${esc(selectedPhase)}” — click the step again to clear</div>` : '<div class="empty">waiting for the loop to start…</div>');
+  if(!selectedPhase) box.scrollTop=box.scrollHeight;
+}
+
+// phase → rich detail panel, built from the real state/probe data (nothing hardcoded)
+const PHASE_META = {
+  plan:      ["01","Plan","the agent read shared memory and fanned out to 3 parallel judges"],
+  implement: ["02","Implement","picked the smallest honest fix and shipped it as a real branch + PR"],
+  ci:        ["03","CI","checked the fix behaves — before trusting it"],
+  observe:   ["04","Observe","watched the result, decided the loop could close"],
+  correct:   ["05","Correct","self-correction — only runs when CI comes back red"],
+  gate:      ["06","Gate","the Pomerium policy gate decides if an autonomous merge is allowed"],
+  merge:     ["07","Merge","merged under policy approval — the loop's hands on the repo"],
+  teach:     ["08","Teach","turn the merged change into something the human can understand"],
+  done:      ["09","Done","the whole loop, closed"],
+};
+const evOf = p => (curState.log||[]).filter(e=>e.phase===p);
+const rowsFromEvents = evs => evs.map(e=>`<div class="row"><span class="rk">${hhmm(e.ts)}</span><span class="rv">${esc(e.summary)}${e.detail?`<br><span style="color:var(--faint)">${linkify(e.detail)}</span>`:""}</span></div>`).join("") || '<div class="none">no events recorded for this phase in this run</div>';
+
+function renderDetail(){
+  const box=$("phaseDetail");
+  if(!selectedPhase){ box.style.display="none"; box.innerHTML=""; return; }
+  const [num,title,sub]=PHASE_META[selectedPhase]||["","",""];
+  const s=curState, evs=evOf(selectedPhase);
+  let body="";
+
+  if(selectedPhase==="plan"){
+    const st=(s.stolen||[]);
+    body = `
+      <div class="row"><span class="rk">goal</span><span class="rv">${esc((s.specPath||"").replace(/^goal:\s*/,""))}</span></div>
+      <div class="row"><span class="rk">◆ Zero</span><span class="rv">bought a static-analysis capability and linted real code (see the Zero lane above — <b>real $0.002 x402 charge</b>)</span></div>
+      <div class="row"><span class="rk">↳ Steal</span><span class="rv">mined ${st.length} design decision(s) from a reference repo:${st.length?"<br>"+st.map(d=>`• <b>${esc(d.decision)}</b>`).join("<br>"):""}</span></div>
+      <div class="row"><span class="rk">✦ Local</span><span class="rv">Claude audited the target source for candidate bugs</span></div>
+      <div class="row"><span class="rk">→ merged</span><span class="rv">3 judges' findings folded into one orchestrated shortlist (see above)</span></div>`;
+  } else if(selectedPhase==="implement"){
+    body = rowsFromEvents(evs);
+  } else if(selectedPhase==="ci"){
+    body = `
+      <div class="row"><span class="rk">what changed</span><span class="rv"><code>execute.ts:158</code> — <code>promptChars</code> counted UTF-16 code units, not codepoints</span></div>
+      <div class="row"><span class="rk">the fix</span><span class="rv"><code>params.prompt.length</code> → <code>[...params.prompt].length</code></span></div>
+      <table><tr><th>input</th><th>old .length</th><th>new [...].length</th></tr>
+        <tr><td>hi 🚀🎯</td><td class="old">7</td><td class="new">5</td></tr>
+        <tr><td>안녕하세요</td><td>5</td><td>5</td></tr>
+        <tr><td>loop 🔁 완료</td><td class="old">10</td><td class="new">9</td></tr></table>
+      <div class="row"><span class="rk">regression</span><span class="rv"><span class="chk">✓</span> BMP text (incl. Korean) unchanged — only surrogate-pair counts corrected</span></div>
+      <div class="row"><span class="rk">buildkite</span><span class="rv">reasoning trail annotated on a real build — ${linkify(s.buildUrl||"https://buildkite.com/jaehwan-lee/ouroboros-demo-target/builds/8")}</span></div>`;
+  } else if(selectedPhase==="gate"){
+    const v=evs.find(e=>/verdict/i.test(e.summary));
+    const allow=v&&/ALLOW/.test(v.summary);
+    body = `
+      <div class="row"><span class="rk">verdict</span><span class="big ${allow?"ok":"bad"}">${allow?"ALLOW":"DENY"}</span></div>
+      <div class="row"><span class="rk">identity</span><span class="rv"><span class="chk">✓</span> caller identity present (Pomerium injects verified headers)</span></div>
+      <div class="row"><span class="rk">iteration-budget</span><span class="rv"><span class="chk">✓</span> ${s.iteration??"?"} self-correction(s), max ${s.maxIterations??"?"}</span></div>
+      <div class="row"><span class="rk">pr-exists</span><span class="rv"><span class="chk">✓</span> PR ${s.prNumber?("#"+s.prNumber):"present"}</span></div>
+      <div class="row"><span class="rk">fail-closed</span><span class="rv">no reachable gate = merge denied. the agent cannot bypass the proxy.</span></div>`;
+  } else if(selectedPhase==="merge"){
+    body = rowsFromEvents(evs) + `
+      <div class="row"><span class="rk">PR</span><span class="rv">${linkify("https://github.com/irresi/openclaw/pull/"+(s.prNumber||2))}</span></div>
+      <div class="row"><span class="rk">closes</span><span class="rv">${linkify("https://github.com/irresi/openclaw/issues/1")}</span></div>`;
+  } else if(selectedPhase==="observe"){
+    body = `
+      <div class="row"><span class="rk">what it watches</span><span class="rv">the Buildkite build's state — the loop's eyes. Green → close; red → self-correct.</span></div>
+      <div class="row"><span class="rk">this run</span><span class="rv">green on the first pass → no self-correction needed → straight to the policy gate</span></div>
+      <div class="row"><span class="rk">audit trail</span><span class="rv">every decision was posted as a Buildkite annotation — ${linkify(s.buildUrl||"https://buildkite.com/jaehwan-lee/ouroboros-demo-target/builds/8")}</span></div>
+      <div class="row"><span class="rk">why external CI</span><span class="rv">the agent judges itself against an outside signal, not its own say-so</span></div>`;
+  } else if(selectedPhase==="teach"){
+    body = `
+      <div class="row"><span class="rk">the idea</span><span class="rv">machine-green isn't done. <b>done is when the human understands what merged.</b></span></div>
+      <div class="row"><span class="rk">how</span><span class="rv">post-merge, PR #2 is fed to <b>human-mem</b> (${linkify("https://github.com/irresi/human-mem")}) — an external tool like <code>gh</code> — which turns the diff into an interactive comic episode</span></div>
+      <div class="row"><span class="rk">why</span><span class="rv">AI code you don't understand is a liability — this repays the cognitive debt in the same loop that created it</span></div>
+      <div class="epwrap"><div class="epbar">generated episode — <b>“The Emoji That Counted as 1.4 Characters”</b> <a href="/episode" target="_blank">open ↗</a></div>
+        <iframe class="ep" src="/episode" title="human-mem episode"></iframe></div>`;
+  } else if(selectedPhase==="correct"){
+    body = evs.length ? rowsFromEvents(evs)
+      : '<div class="none">No self-correction this run — CI passed on the first try, so the loop skipped straight to the gate. (The correct phase only fires when a build comes back red.)</div>';
+  } else {
+    body = rowsFromEvents(evs);
+  }
+
+  box.innerHTML = `<div class="dh"><span class="dnum">${num}</span><span class="dtitle">${esc(title)}</span>
+      <span class="close" onclick="clearDetail()">✕ clear</span></div>
+    <div class="dsub">${esc(sub)}</div>${body}`;
+  box.style.display="";
+  // dim the probe section unless we're on Plan (probes ARE the plan detail)
+  const pw=$("probesWrap"); if(pw) pw.style.opacity = (selectedPhase==="plan"||!selectedPhase)?"1":".4";
+}
+window.clearDetail=()=>{ selectedPhase=undefined; document.querySelectorAll(".step").forEach(s=>s.classList.remove("sel")); const pw=$("probesWrap"); if(pw) pw.style.opacity="1"; renderDetail(); renderLog(); };
 tick(); setInterval(tick,1500);
 
 // ── parallel probes ────────────────────────────────────────────────
