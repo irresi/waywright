@@ -34,45 +34,30 @@
   .footer{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:20px;color:var(--muted);border-top:1px solid var(--border);padding-top:22px}
   .wordmark{font-family:var(--mono);letter-spacing:.14em;font-weight:700;color:var(--ink)}
 
-  /* title */
   .title-tag{font-family:var(--mono);font-size:28px;letter-spacing:.14em;color:var(--muted)}
   .title-sub{font-size:44px;color:var(--muted);margin-top:32px;font-weight:500}
   .sponsor-row{display:flex;gap:16px;margin-top:56px;flex-wrap:wrap}
   .chip{font-family:var(--mono);font-size:22px;padding:12px 22px;border:1px solid var(--border);border-radius:999px;color:var(--muted)}
   .chip b{color:var(--ink);font-weight:600}
 
-  /* problem two-col */
   .cols{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:20px}
   .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:44px}
   .card .tag{font-family:var(--mono);font-size:22px;letter-spacing:.12em;color:var(--accent);text-transform:uppercase}
   .card h3{margin:18px 0 16px;font-size:42px}
   .card p{font-size:30px;line-height:1.4;color:var(--muted)}
 
-  /* loop diagram */
   .loop{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:26px}
   .node{font-family:var(--mono);font-size:30px;padding:20px 26px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
   .node.hot{border-color:var(--accent);color:var(--accent)}
   .node.mem{border-color:var(--success);color:var(--success)}
   .arrow{color:var(--muted);font-size:34px}
 
-  /* evidence rows */
   .ev{display:grid;grid-template-columns:280px 1fr;gap:28px;padding:30px 0;border-bottom:1px solid var(--border);align-items:baseline}
   .ev:last-child{border-bottom:none}
   .ev .who{font-family:var(--mono);font-size:30px;color:var(--accent)}
   .ev .what{font-size:32px;line-height:1.35}
-  .ev .what .mono{font-size:26px;color:var(--muted)}
+  .ev .what .mono{font-size:24px;color:var(--muted);word-break:break-all}
 
-  /* two-run */
-  .runs{display:grid;grid-template-columns:1fr 80px 1fr;gap:20px;align-items:center;margin-top:20px}
-  .run{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:40px;height:100%}
-  .run.r2{border-color:var(--success)}
-  .run .rk{font-family:var(--mono);font-size:24px;letter-spacing:.1em;color:var(--muted)}
-  .run .rt{font-size:34px;font-weight:700;margin:16px 0 20px;line-height:1.2}
-  .run .rq{font-size:26px;line-height:1.4;color:var(--muted)}
-  .run .rq b{color:var(--ink);font-weight:600}
-  .between{text-align:center;font-family:var(--mono);color:var(--success);font-size:40px}
-
-  /* judging grid */
   .jgrid{display:grid;grid-template-columns:1fr 1fr;gap:20px 48px;margin-top:24px}
   .jrow{display:grid;grid-template-columns:280px 1fr;gap:24px;padding:22px 0;border-bottom:1px solid var(--border);align-items:baseline}
   .jrow .jk{font-family:var(--mono);font-size:26px;color:var(--accent)}
@@ -81,7 +66,11 @@
   .big-quote{font-size:72px;line-height:1.12;font-weight:800;letter-spacing:-.02em;max-width:1500px}
   .big-quote .accent{color:var(--accent)}
 
-  /* nav */
+  .video-frame{margin-top:40px;flex:1;border:2px solid var(--accent);border-radius:16px;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px}
+  .video-frame .play{width:120px;height:120px;border-radius:50%;border:3px solid var(--accent);display:grid;place-items:center}
+  .video-frame .play::after{content:"";border-left:38px solid var(--accent);border-top:24px solid transparent;border-bottom:24px solid transparent;margin-left:10px}
+  .video-frame .vlabel{font-family:var(--mono);font-size:28px;color:var(--muted);letter-spacing:.1em}
+
   #nav{position:fixed;bottom:20px;right:26px;font-family:var(--mono);font-size:15px;color:#666;z-index:10}
   @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -100,7 +89,7 @@
         <span class="chip"><b>Zero.xyz</b> · capability</span>
       </div>
     </div>
-    <div class="footer"><span class="wordmark">WAYWRIGHT</span><span>a self-directing engineering agent with memory</span></div>
+    <div class="footer"><span class="wordmark">WAYWRIGHT</span><span>a self-directing engineering agent</span></div>
   </section>
 
   <!-- 2 PROBLEM -->
@@ -110,8 +99,8 @@
     <div class="cols">
       <div class="card">
         <div class="tag">Agent side</div>
-        <h3 class="danger">Decision amnesia</h3>
-        <p>Every session forgets why the last architecture was chosen, what was already rejected, and why the previous attempt failed. It re-derives from zero.</p>
+        <h3 class="danger">Bounded by the model</h3>
+        <p>The agent only knows what its model knows. When a task needs an ability the model lacks, it stalls or guesses instead of reaching for a proven tool.</p>
       </div>
       <div class="card">
         <div class="tag">Human side</div>
@@ -127,8 +116,8 @@
   <section class="slide" data-id="thesis">
     <div class="kicker">The idea</div>
     <div class="fill" style="justify-content:center;display:flex;flex-direction:column">
-      <div class="big-quote">One shared engineering memory.<br>The agent reads it to <span class="accent">decide what to build next</span>.<br>The human reads it to <span class="accent">understand what shipped</span>.</div>
-      <p class="lede muted" style="margin-top:44px">Most agents execute a direction you hand them. Waywright <b class="accent">finds</b> the direction from memory + prior art, ships it, and writes the outcome back — so the next decision stands on the last one.</p>
+      <div class="big-quote">Don't generate from scratch.<br><span class="accent">Reuse what already works</span>, and <span class="accent">buy the ability you lack.</span></div>
+      <p class="lede muted" style="margin-top:44px">Most agents execute a direction you hand them. Waywright <b class="accent">finds</b> the direction — scouting prior art instead of re-deriving, and acquiring a paid capability when the model's own reach runs out — then drives it all the way to a policy-gated merge.</p>
     </div>
     <div class="footer"><span class="wordmark">WAYWRIGHT</span><span>03</span></div>
   </section>
@@ -138,9 +127,9 @@
     <div class="kicker">How it works</div>
     <h2>A loop that closes on itself.</h2>
     <div class="loop">
-      <span class="node mem">recall memory</span><span class="arrow">→</span>
+      <span class="node">goal</span><span class="arrow">→</span>
       <span class="node">scout prior art</span><span class="arrow">→</span>
-      <span class="node">decide</span><span class="arrow">→</span>
+      <span class="node hot">acquire capability</span><span class="arrow">→</span>
       <span class="node">implement</span><span class="arrow">→</span>
       <span class="node hot">CI observe</span><span class="arrow">→</span>
       <span class="node hot">self-correct</span>
@@ -148,11 +137,9 @@
     <div class="loop" style="margin-top:14px">
       <span class="node">policy gate</span><span class="arrow">→</span>
       <span class="node">merge</span><span class="arrow">→</span>
-      <span class="node mem">write outcome back to memory</span>
-      <span class="arrow">↻</span>
-      <span class="muted mono" style="font-size:26px">next run recalls it</span>
+      <span class="node mem">teach the human</span>
     </div>
-    <p class="lede muted" style="margin-top:44px">Navigator finds the way · Actuator drives it · Buildkite is the eyes · Pomerium is the boundary · memory makes it cumulative.</p>
+    <p class="lede muted" style="margin-top:44px">Buildkite is the eyes on CI · Pomerium is the boundary on merge · Zero.xyz is the reach past the model's limits.</p>
     <div class="fill"></div>
     <div class="footer"><span class="wordmark">WAYWRIGHT</span><span>04</span></div>
   </section>
@@ -162,43 +149,40 @@
     <div class="kicker">Tool use · all three, live</div>
     <h2>Not integrations on a slide.<br>Real calls, real receipts.</h2>
     <div style="margin-top:26px">
-      <div class="ev"><div class="who">BUILDKITE</div><div class="what">The loop's <b>eyes</b>: created build <span class="mono">#6</span>, observed it pass, annotated each iteration on the build page. <span class="mono">create_build · get_build · tail_logs · create_annotation</span></div></div>
-      <div class="ev"><div class="who">POMERIUM</div><div class="what">The loop's <b>boundary</b>: merge request traverses a real proxy. <span class="success">GET probe → 403 denied</span>, <span class="success">POST approval → 200 through to gate</span>. Fail-closed.</div></div>
-      <div class="ev"><div class="who">ZERO.XYZ</div><div class="what">The loop's <b>hands</b>: paid capability calls to preflight prior-art repos. <span class="mono">run_mynW…IFwfir · run_u4Vtw…UR07Zhav</span></div></div>
+      <div class="ev"><div class="who">BUILDKITE</div><div class="what">The loop's <b>eyes</b>: creates builds, observes terminal state, pulls failed logs, and annotates each self-correction on the build page. <span class="mono">create_build · get_build · tail_logs · create_annotation</span></div></div>
+      <div class="ev"><div class="who">POMERIUM</div><div class="what">The loop's <b>boundary</b>: the merge request passes a real policy gate. <span class="success">ALLOW — identity ✓ · budget 1/3 ✓ · PR #2 ✓</span>. Fail-closed: an unreachable gate cannot merge.</div></div>
+      <div class="ev"><div class="who">ZERO.XYZ</div><div class="what">The loop's <b>reach</b>: buys a JS static-analysis capability the model lacks, <span class="success">$0.002 USDC via x402</span>. <span class="mono">tx 0x2bda6e78…ede3b2a (Base)</span></div></div>
     </div>
     <div class="fill"></div>
     <div class="footer"><span class="wordmark">WAYWRIGHT</span><span>05</span></div>
   </section>
 
-  <!-- 6 THE PROOF: memory changes the second decision -->
-  <section class="slide" data-id="tworun">
-    <div class="kicker">The proof · autonomy from memory</div>
-    <h2>The second decision is not the first.</h2>
-    <div class="runs">
-      <div class="run r1">
-        <div class="rk">RUN 1 — goal: help devs trust autonomous changes</div>
-        <div class="rt">Render decision-linked diff annotations</div>
-        <div class="rq">Chose the human-facing surface. Scouted Sourcify (via Zero). Built it, CI went <b class="success">green</b>, merged <span class="mono">PR #1</span>. Outcome written back.</div>
+  <!-- 6 THE RESULT -->
+  <section class="slide" data-id="result">
+    <div class="kicker">The proof · one closed loop, all real</div>
+    <h2>Vague goal → real merge, no human in the loop.</h2>
+    <div class="cols" style="margin-top:24px">
+      <div class="card">
+        <div class="tag">What it found & fixed</div>
+        <p style="margin-top:14px"><b style="color:var(--ink)">issue #1</b> → <b style="color:var(--ink)">PR #2</b>, squash-merged: the exec log counted UTF-16 code units, not codepoints, so multi-byte text was mislabeled. A linter it <span class="accent">bought from Zero</span> surfaced the class of bug.</p>
       </div>
-      <div class="between">↻</div>
-      <div class="run r2">
-        <div class="rk">RUN 2 — recalls Run 1 from memory</div>
-        <div class="rt">Formalize the decision-record schema</div>
-        <div class="rq">Did <b>not</b> re-propose diff annotations — it remembered they shipped. Evolved to the schema those annotations consumed, and ordered it <b>before</b> the two dependent candidates.</div>
+      <div class="card">
+        <div class="tag">How it stayed safe</div>
+        <p style="margin-top:14px">Bounded correction budget, minimal code-only diffs, CI green before any merge request, and a <span class="accent">fail-closed</span> Pomerium gate on the one irreversible step.</p>
       </div>
     </div>
-    <p class="lede" style="margin-top:36px"><span class="muted">Verbatim from Run 2's rationale:</span> “…a natural, <span class="accent">non-reversing continuation</span> of what already shipped.”</p>
+    <p class="lede" style="margin-top:36px"><span class="muted">Every candidate, rejected alternative, build, and correction is a durable artifact —</span> <span class="accent">github.com/irresi/openclaw/pull/2</span></p>
     <div class="footer"><span class="wordmark">WAYWRIGHT</span><span>06</span></div>
   </section>
 
-  <!-- 7 THE UI -->
+  <!-- 7 REPAYING COGNITIVE DEBT -->
   <section class="slide" data-id="ui">
     <div class="kicker">Repaying cognitive debt</div>
-    <h2>Every run reconstructs its own decision.</h2>
-    <p class="lede" style="margin-top:20px">A self-contained run record shows the human what the agent saw: recalled memory, candidates it weighed, <span class="accent">why it rejected the others</span>, the prior-art it cited, the Buildkite→Pomerium→merge timeline, and what it learned for next time.</p>
+    <h2>Done is when the human understands.</h2>
+    <p class="lede" style="margin-top:20px">A merge doesn't end the loop. Waywright turns the merged change into a human-context artifact that shows <span class="accent">why the change exists</span> — recalled context, the alternatives it rejected, the prior art it cited, and the Buildkite→Pomerium→merge timeline.</p>
     <div class="cols" style="margin-top:40px">
-      <div class="card"><div class="tag">Not a dashboard</div><p style="margin-top:14px">It doesn't show "build is green." It shows <b style="color:var(--ink)">why this change exists</b> — the reasoning a bare diff throws away.</p></div>
-      <div class="card"><div class="tag">The same record</div><p style="margin-top:14px">Feeds the agent's next decision <b style="color:var(--ink)">and</b> the human's understanding. One source of truth, two readers.</p></div>
+      <div class="card"><div class="tag">Not a dashboard</div><p style="margin-top:14px">It doesn't just say "build is green." It shows <b style="color:var(--ink)">the reasoning a bare diff throws away.</b></p></div>
+      <div class="card"><div class="tag">One record, two readers</div><p style="margin-top:14px">The same artifact feeds the agent's next decision <b style="color:var(--ink)">and</b> the human's understanding.</p></div>
     </div>
     <div class="fill"></div>
     <div class="footer"><span class="wordmark">WAYWRIGHT</span><span>07</span></div>
@@ -209,23 +193,25 @@
     <div class="kicker">Against the rubric</div>
     <h2>Five axes, real evidence each.</h2>
     <div class="jgrid">
-      <div class="jrow"><div class="jk">Autonomy</div><div class="jv">Observes real CI, self-corrects, gates, merges — no human in the loop. Direction chosen from memory, not handed in.</div></div>
-      <div class="jrow"><div class="jk">Idea</div><div class="jv">A new behavior category: shared agent+human memory that makes decisions cumulative.</div></div>
+      <div class="jrow"><div class="jk">Autonomy</div><div class="jv">Scouts, acquires, implements, observes CI, self-corrects, gates, merges — no human in the loop.</div></div>
+      <div class="jrow"><div class="jk">Idea</div><div class="jv">Reuse over generation; buy the ability the model lacks; close the human loop, not just the machine one.</div></div>
       <div class="jrow"><div class="jk">Technical</div><div class="jv">Hand-written MCP client, bounded correction loop, fail-closed gate, real merge to main.</div></div>
       <div class="jrow"><div class="jk">Tool use</div><div class="jv">Buildkite + Pomerium + Zero, each with live receipts — not logos.</div></div>
-      <div class="jrow"><div class="jk">Presentation</div><div class="jv">Two-run demo: memory visibly changes the second decision, live.</div></div>
+      <div class="jrow"><div class="jk">Presentation</div><div class="jv">A single closed loop, demoed live end to end.</div></div>
     </div>
     <div class="fill"></div>
     <div class="footer"><span class="wordmark">WAYWRIGHT</span><span>08</span></div>
   </section>
 
-  <!-- 9 CLOSE -->
-  <section class="slide" data-id="close">
-    <div class="fill" style="justify-content:center;display:flex;flex-direction:column">
-      <div class="big-quote">A green build closes the machine loop.<br><span class="accent">Waywright closes the loop between what the agent did<br>and what the team knows.</span></div>
-      <div class="title-sub" style="margin-top:48px">Give it a goal, not a ticket.</div>
+  <!-- 9 DEMO VIDEO -->
+  <section class="slide" data-id="demo">
+    <div class="kicker">See it run</div>
+    <h2>Demo</h2>
+    <div class="video-frame">
+      <div class="play"></div>
+      <div class="vlabel">DEMO VIDEO</div>
     </div>
-    <div class="footer"><span class="wordmark">WAYWRIGHT</span><span class="mono">github.com/irresi/ouroboros-loop</span></div>
+    <div class="footer"><span class="wordmark">WAYWRIGHT</span><span class="mono">github.com/irresi/waywright</span></div>
   </section>
 </div>
 <div id="nav"></div>
@@ -233,7 +219,6 @@
   const slides=[...document.querySelectorAll('.slide')];
   let i=Math.min(slides.length-1,Math.max(0,parseInt(localStorage.getItem('ww_slide')||'0',10)));
   function fit(){
-    const s=slides[i];
     const k=Math.min(innerWidth/1920,innerHeight/1080);
     slides.forEach(x=>x.style.transform=`scale(${k})`);
   }
