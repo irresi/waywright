@@ -68,3 +68,8 @@ export async function mcpListTools(): Promise<string[]> {
   const result = await rpc("tools/list", {});
   return (result?.tools ?? []).map((t: any) => t.name);
 }
+
+export async function mcpToolSchemas(): Promise<any[]> {
+  const result = await rpc("tools/list", {});
+  return result?.tools ?? [];
+}

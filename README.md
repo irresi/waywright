@@ -1,56 +1,102 @@
-# Ouroboros
+# Waywright
 
-**A self-directing agent that closes the whole loop — including the human one.**
+> Give it a goal, not a ticket.
 
-Spec in → the agent **plans by stealing prior art** (clones the closest OSS references and
-mines their design decisions) → **implements** → runs **CI** → **observes** failures →
-**self-corrects** with minimal diffs (every iteration's reasoning annotated on the build
-page) → passes an **identity-aware policy gate** → **merges** → and finally **teaches the
-human** what it built, as an interactive comic episode.
+Waywright is a self-directing engineering agent. It observes the current project, scouts prior art, proposes competing directions, selects one with explicit evidence, then drives that direction through implementation, real CI, self-correction, policy approval, and merge.
 
-Everyone else closes the machine loop. Machine-green is not done — *done is when the
-human understands what merged.* Ouroboros closes both.
+Most coding agents execute a direction somebody already chose. Waywright finds the direction and ships it.
 
+## The loop
+
+```text
+HIGH-LEVEL GOAL
+      │
+      ▼
+┌──────────── NAVIGATOR ────────────┐
+│ Context → Scout → Branch → Decide │
+│                  → Plan           │
+└────────────────┬──────────────────┘
+                 │ approved direction
+                 ▼
+┌───────────── ACTUATOR ────────────┐
+│ Implement → Buildkite → Observe   │
+│      ▲                     │ red  │
+│      └──── minimal fix ◀───┘      │
+└────────────────┬──────────────────┘
+                 │ green
+                 ▼
+        Pomerium policy boundary
+                 │ allow
+                 ▼
+               MERGE
+                 │
+        ┌────────┴────────┐
+        ▼                 ▼
+ human-context edge    next direction
 ```
-spec ─▶ plan (steal prior art) ─▶ implement ─▶ CI ─▶ observe ─┐
-  ▲                                                           │ red? self-correct
-  │                                                           ▼ (annotated, minimal diff)
-teach human ◀─ merge ◀─ policy gate (Pomerium PPL) ◀─────── green
-(comic episode)
-```
 
-## Sponsor tools used (3+)
+## Auditable direction finding
 
-| Tool | Role in the loop |
-| --- | --- |
-| **Buildkite** (hosted MCP server, `/direct` headless) | The loop's eyes & voice: `create_build`, `get_build`, `list_jobs`, `tail_logs` for observe; `create_annotation` narrates every self-correction on the build page — auditable autonomy. We speak MCP JSON-RPC directly (`src/mcp-client.ts`). |
-| **Pomerium** (PPL policy + identity headers) | The loop's conscience: the merge-gate service sits behind a Pomerium route (`gate/pomerium.yaml`); PPL decides which identity may request an autonomous merge. Fail-closed — no gate, no merge. |
-| **Zero.xyz** (capability market, x402) | The loop's hands when its own aren't enough: mid-loop capability search & paid acquisition with the agent's own managed wallet (`src/zero.ts`). |
+A run produces three artifacts in the target repository:
 
-## The human-context layer
+- `.waywright/navigation.json` — observed context, all candidates, evidence, and prior art
+- `.waywright/direction.md` — readable decision record, including rejected alternatives
+- `.waywright/plan.md` — executable implementation and RED/GREEN verification plan
 
-Post-merge, Ouroboros calls [human-mem](https://github.com/irresi/human-mem) (our
-open-source side project, used here as an external tool like `gh` or `claude`) to turn
-the merged PR into an interactive comic episode — so the human's understanding keeps up
-with the agent's output. AI code you don't understand is a liability; this repays the
-cognitive debt in the same loop that created it.
+The agent cannot silently jump from goal to code. Its chosen direction and rejected alternatives remain reviewable.
+
+## Sponsor integrations
+
+### Buildkite — Sensor and audit surface
+
+Waywright speaks JSON-RPC directly to Buildkite's hosted MCP server. It creates builds, observes terminal state, retrieves failed job logs, and posts each correction as a Buildkite annotation. The CI page is the live audit trail rather than a fabricated dashboard.
+
+### Pomerium — Autonomous-action governor
+
+The merge service sits behind a Pomerium policy boundary. The coding agent may create branches, write code, run CI, and revise its work, but merge requires an allowed identity and runtime policy. The client fails closed: an unreachable gate cannot result in a merge.
+
+### Zero.xyz — Capability acquisition
+
+When a selected direction requires an ability Waywright does not have locally, it can discover and invoke an affordable capability from Zero's market under a spend limit. Capability use is explicit in the run record.
+
+### Nexla — future enterprise context provider, not part of this build
+
+The current Navigator reads local repository, GitHub, Buildkite, and decision history directly. Its `ContextProvider` boundary can later be backed by Nexla to supply governed product, customer, and operational signals. We do not claim Nexla as an implemented sponsor integration.
+
+## Human understanding is an edge, not the whole product
+
+A merged change can emit multiple edges: deployment, a decision record, a learning artifact, or the next autonomous direction. For the demo goal, Waywright independently selected a counterfactual replay: an executable test that fails on the parent commit and passes after the change. That makes the behavioral delta objective instead of generating another passive PR summary.
 
 ## Run
 
+Prerequisites: Bun, authenticated `claude`, `gh`, Buildkite token/config, and a target Git repository.
+
 ```bash
 bun install
-# terminal 1: the policy gate (behind Pomerium in prod; direct in dev)
+
+# 1. Discover a direction from a high-level goal.
+TARGET_DIR=../target bun run navigate ./demo/goal.md
+
+# 2. Start the policy service (Pomerium fronts this in the full demo).
 bun run gate/server.ts
-# terminal 2: the loop
-export BUILDKITE_API_TOKEN=bkua_... BUILDKITE_ORG=... BUILDKITE_PIPELINE=...
-export TARGET_DIR=../demo-target TARGET_REPO=owner/name
-bun run src/loop.ts specs/demo.md
+
+# 3. Execute the selected plan.
+export BUILDKITE_API_TOKEN=...
+export BUILDKITE_ORG=...
+export BUILDKITE_PIPELINE=...
+export TARGET_DIR=../target
+export TARGET_REPO=owner/repo
+bun run execute
 ```
 
 ## Safety rails
-- Iteration budget (`maxIterations`, default 4) — loop cannot run forever.
-- Policy gate is **fail-closed**: unreachable gate = merge denied.
-- Minimal-diff principle enforced in every correction prompt.
-- Every decision annotated on the Buildkite build page — the audit trail *is* the UI.
 
-Built at the Loop Engineering Hackathon (SF, 2026-07-17).
+- Bounded correction budget; exhaustion stops before PR creation.
+- CI must be green before a merge request is created.
+- Merge policy is fail-closed.
+- Corrections request minimal code-only diffs and may not edit CI configuration.
+- Candidate directions, evidence, rejected alternatives, builds, and corrections are durable artifacts.
+
+## Hackathon provenance
+
+This repository and submitted implementation were created during the Loop Engineering Challenge on July 17, 2026. Prior projects were not copied into this codebase. Existing workflows informed the design, while all submitted implementation is fresh.

@@ -6,7 +6,7 @@ import { spawnSync } from "bun";
 import type { StolenDecision } from "./types";
 import { mkdirSync, existsSync } from "node:fs";
 
-const REF_DIR = ".ouroboros/reference";
+const REF_DIR = ".waywright/reference";
 
 export async function findReferenceRepos(spec: string): Promise<string[]> {
   const q = await ask(

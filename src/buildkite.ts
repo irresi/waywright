@@ -48,6 +48,16 @@ async function waitTerminal(number: number, timeoutSec: number): Promise<BuildRe
   }
 }
 
+export function tailLogArguments(org: string, pipeline: string, buildNumber: number, job: { id?: string; uuid?: string }) {
+  return {
+    org_slug: org,
+    pipeline_slug: pipeline,
+    build_number: String(buildNumber),
+    job_id: job.id ?? job.uuid ?? "",
+    tail: 100,
+  };
+}
+
 // Pull failing job logs — the raw material for self-correction.
 export async function failedLogs(buildNumber: number): Promise<string> {
   const jobs = await mcpCall("list_jobs", {
@@ -58,13 +68,10 @@ export async function failedLogs(buildNumber: number): Promise<string> {
   let out = "";
   for (const j of failed) {
     try {
-      const log = await mcpCall("tail_logs", {
-        org_slug: ORG, pipeline_slug: PIPELINE, build_number: String(buildNumber),
-        job_uuid: j.uuid ?? j.id, tail: 100,
-      });
-      out += `\n### job: ${j.name ?? j.uuid}\n${typeof log === "string" ? log : JSON.stringify(log)}\n`;
+      const log = await mcpCall("tail_logs", tailLogArguments(ORG, PIPELINE, buildNumber, j));
+      out += `\n### job: ${j.name ?? j.id ?? j.uuid}\n${typeof log === "string" ? log : JSON.stringify(log)}\n`;
     } catch (e) {
-      out += `\n### job: ${j.name ?? j.uuid} (log fetch failed: ${e})\n`;
+      out += `\n### job: ${j.name ?? j.id ?? j.uuid} (log fetch failed: ${e})\n`;
     }
   }
   return out || "(no failed job logs found)";

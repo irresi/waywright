@@ -1,8 +1,14 @@
 {
-  "name": "ouroboros",
-  "module": "index.ts",
+  "name": "waywright",
+  "version": "0.1.0",
   "type": "module",
   "private": true,
+  "scripts": {
+    "navigate": "bun run src/waywright.ts",
+    "execute": "bun run src/execute.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
