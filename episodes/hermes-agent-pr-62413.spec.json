@@ -1,0 +1,456 @@
+{
+  "spec_version": "0.1",
+  "id": "hermes-agent-pr-62413",
+  "source": {
+    "kind": "pr",
+    "repo": "NousResearch/hermes-agent",
+    "pr_number": 62413,
+    "issue_numbers": [
+      54527
+    ],
+    "related_prs": [
+      62134,
+      62144
+    ],
+    "merged_at": "2026-07-11T02:35:06Z"
+  },
+  "narrative_density": "long-form",
+  "title": "The message that filed itself under the wrong session",
+  "logline": "A debounce timer and a rejected-submit restore both wrote drafts using whatever session was focused *when they fired*, not the one that owned the text — so a long, careful message vanished into another chat.",
+  "concepts": [
+    {
+      "id": "render-ref-vs-swap-owned-ref",
+      "name": "swap-owned ref",
+      "aliases": [
+        "draftScopeRef",
+        "swap-owned ref",
+        "swap effect"
+      ],
+      "intro": {
+        "one_liner": "A ref updated only by the session-switch effect, not on every render — so async code reads the session that's actually loaded, not whatever's focused right now.",
+        "full": "`activeQueueSessionKeyRef` gets reassigned on every render, so by the time an async callback (a debounce timer, a `pagehide` handler) reads it, it may already point at whatever session the user switched to — not the one whose text it's supposed to persist. `draftScopeRef` fixes this by only being written inside the swap effect, the one place that actually owns 'which session's draft is loaded right now.' Anything scheduled while a session is loaded captures that ref's value and keeps it, even if the render-time ref moves on underneath it."
+      },
+      "area": "desktop/composer"
+    },
+    {
+      "id": "route-token-pinning",
+      "name": "route token",
+      "aliases": [
+        "route token",
+        "getRouteToken"
+      ],
+      "intro": {
+        "one_liner": "A token captured at submit time that identifies which session a reply belongs to, checked again before delivery.",
+        "full": "When a prompt is submitted, the code now grabs `getRouteToken()` and the current stored session id at that moment. Async resume, attachment sync, and timeout recovery use those captured values instead of re-reading 'what session is focused now.' If the token no longer matches by the time a response is ready to land, the delivery is treated as stale and rolled back instead of appended to whatever chat happens to be open."
+      },
+      "area": "desktop/session"
+    },
+    {
+      "id": "pending-write-integrity-guard",
+      "name": "integrity guard",
+      "aliases": [
+        "isPendingDraftPersistCurrent",
+        "integrity guard"
+      ],
+      "intro": {
+        "one_liner": "Before a delayed write commits, it checks it's still the pending write on file — not superseded by a clear or a newer one.",
+        "full": "`isPendingDraftPersistCurrent` compares a `{scope, text}` pair against whatever's currently recorded as pending. A debounce timer captures its pair when scheduled, but doesn't fire until later — by then a session swap may have cleared the pending slot, or a newer keystroke may have replaced it. The guard drops the write in either case instead of letting a stale timer overwrite fresh text. It's defense-in-depth: the scope-capture fix already makes every captured pair correct, this just stops a future regression from silently misfiling one session's text under another's key."
+      },
+      "area": "desktop/composer"
+    }
+  ],
+  "cast": [
+    {
+      "id": "hexlab98",
+      "label": "@HexLab98",
+      "role": "author of the submit/resume routing fix"
+    },
+    {
+      "id": "joaomarcos44",
+      "label": "@JoaoMarcos44",
+      "role": "author of the composer draft-scope fix"
+    },
+    {
+      "id": "teknium1",
+      "label": "@teknium1",
+      "role": "author of the consolidating PR"
+    },
+    {
+      "id": "alt-glitch",
+      "label": "@alt-glitch",
+      "role": "maintainer flagging the duplicate-PR cluster"
+    }
+  ],
+  "panels": [
+    {
+      "beat": "cold-open",
+      "body": "Two Hermes Desktop sessions are open: **Session A**, an existing Flappy Royale chat, and **Session B**, a fresh session for a new project. The user types a long, carefully composed prompt into Session B — then switches to check Session A.",
+      "figure": {
+        "type": "scene",
+        "caption": "The message that never made it",
+        "actors": [
+          {
+            "id": "session-a",
+            "label": "Session A (Flappy Royale)",
+            "x": 20,
+            "y": 30,
+            "kind": "frontend"
+          },
+          {
+            "id": "session-b",
+            "label": "Session B (fresh)",
+            "x": 80,
+            "y": 30,
+            "kind": "frontend"
+          },
+          {
+            "id": "draft-store",
+            "label": "Draft store",
+            "x": 50,
+            "y": 75,
+            "kind": "backend"
+          }
+        ],
+        "steps": [
+          {
+            "action": "appear",
+            "actor": "session-a",
+            "note": "Session A is open — an existing project chat"
+          },
+          {
+            "action": "appear",
+            "actor": "session-b",
+            "note": "Session B opens — a fresh session"
+          },
+          {
+            "action": "type",
+            "actor": "session-b",
+            "text": "carefully composed prompt...",
+            "note": "User types a long message into Session B"
+          },
+          {
+            "action": "move",
+            "actor": "session-b",
+            "to": "session-a",
+            "text": "focus",
+            "note": "User switches focus to Session A before the debounce fires"
+          },
+          {
+            "action": "flow",
+            "actor": "draft-store",
+            "to": "session-a",
+            "label": "stashAt(scope, text)",
+            "fault": true,
+            "note": "Debounce timer fires — reads the render-time ref, which now says Session A"
+          },
+          {
+            "action": "vanish",
+            "actor": "session-b",
+            "note": "Session B's message is filed under Session A's key and never seen again"
+          }
+        ]
+      }
+    },
+    {
+      "beat": "incident",
+      "body": "The linked bug, #54527, reports the loss as **permanent**: the text typed into Session B never appears in any session transcript or the message database. Two independent contributors filed fixes for two different manifestations of the same root shape."
+    },
+    {
+      "beat": "concept-intro",
+      "concept_ref": "render-ref-vs-swap-owned-ref",
+      "body": "The draft debounce, page-hide flush, and rejected-submit restore all needed to answer one question: **which session's text is this?** Before this PR, they answered it by reading a ref that updates on every render — `activeQueueSessionKeyRef` — at the moment the async work finally runs, not at the moment it was scheduled."
+    },
+    {
+      "beat": "hypothesis",
+      "hypothesis_id": "h-draft-scope",
+      "body": "**@JoaoMarcos44's angle:** the bug is in the composer. The debounce timer and `pagehide` flush capture `activeQueueSessionKeyRef.current` when they fire, but the user may have switched sessions in the meantime — the ref has moved on. Fix: pin persistence to the session that's actually loaded in the editor, via a **swap-owned ref**."
+    },
+    {
+      "beat": "hypothesis",
+      "hypothesis_id": "h-submit-routing",
+      "body": "**@HexLab98's angle:** the bug is in submit/resume routing. Async resume, attachment sync, and timeout recovery for a submitted prompt can complete well after the user has switched sessions — and reconnect to whatever session is now focused, delivering the reply into the wrong chat. Fix: pin the starting stored session and a **route token** captured at submit time, and abort delivery on drift."
+    },
+    {
+      "beat": "investigation",
+      "body": "A maintainer comment on the PR cluster confirms both are real, independent races on the same underlying shape: async work started under one session, completing after focus moved to another. #62134 (HexLab98) and #62144 (JoaoMarcos44) each fixed one half. Neither fixed the other."
+    },
+    {
+      "beat": "prediction",
+      "body": "Before the reveal — given both hypotheses above, what should the merged fix actually do?",
+      "prediction": {
+        "question": "Given draft-scope pinning fixes the composer half and route-token pinning fixes the submit half, what should PR #62413 do?",
+        "options": [
+          {
+            "id": "pick-one",
+            "text": "Merge whichever branch is more complete and close the other",
+            "maps_to_hypothesis": "h-draft-scope"
+          },
+          {
+            "id": "combine-both",
+            "text": "Take both mechanisms — draft-scope pinning AND route-token pinning — without adopting either branch wholesale"
+          },
+          {
+            "id": "rewrite-shared",
+            "text": "Write one new shared abstraction that replaces both refs with a single session-locking hook"
+          }
+        ],
+        "answer": "combine-both",
+        "feedback": {
+          "pick-one": "Tempting, but the two fixes cover different code paths (composer drafts vs. submit/resume routing) — picking one leaves the other race live.",
+          "combine-both": "Correct. The PR body states it explicitly: combine the two independent fixes 'without taking either contributor's broader branch wholesale.' Each mechanism is minimal and scoped to its own path.",
+          "rewrite-shared": "Half credit for the instinct — a shared abstraction is plausible engineering, but nothing in the PR data suggests one was built. The actual fix keeps the two mechanisms separate."
+        },
+        "concept_ids": [
+          "render-ref-vs-swap-owned-ref",
+          "route-token-pinning"
+        ]
+      }
+    },
+    {
+      "beat": "reveal",
+      "body": "PR #62413 combines both: draft debounce, page-hide flush, and rejected-submit restore now use `draftScopeRef` (the composer scope that owns the loaded text); async resume, attachment sync, and timeout recovery retain the starting stored session and a `getRouteToken()` value captured at submit time. If the route drifts, the optimistic message is aborted and rolled back instead of delivered into another chat.",
+      "figure": {
+        "type": "scene",
+        "caption": "Same story, this time pinned",
+        "actors": [
+          {
+            "id": "session-a",
+            "label": "Session A",
+            "x": 20,
+            "y": 25,
+            "kind": "frontend"
+          },
+          {
+            "id": "session-b",
+            "label": "Session B",
+            "x": 80,
+            "y": 25,
+            "kind": "frontend"
+          },
+          {
+            "id": "scope-ref",
+            "label": "draftScopeRef",
+            "x": 50,
+            "y": 50,
+            "kind": "backend"
+          },
+          {
+            "id": "draft-store",
+            "label": "Draft store",
+            "x": 50,
+            "y": 80,
+            "kind": "backend"
+          }
+        ],
+        "steps": [
+          {
+            "action": "appear",
+            "actor": "session-b",
+            "note": "Session B loads; swap effect sets draftScopeRef = 'session-b'"
+          },
+          {
+            "action": "type",
+            "actor": "session-b",
+            "text": "carefully composed prompt...",
+            "note": "User types; debounce captures {scope: draftScopeRef.current, text}"
+          },
+          {
+            "action": "move",
+            "actor": "session-b",
+            "to": "session-a",
+            "text": "focus",
+            "note": "User switches focus to Session A"
+          },
+          {
+            "action": "flow",
+            "actor": "scope-ref",
+            "to": "draft-store",
+            "label": "stashAt('session-b', text)",
+            "note": "Timer fires — still reads the captured scope, not the new focus"
+          },
+          {
+            "action": "appear",
+            "actor": "session-a",
+            "note": "Session A's own swap effect clears any stale pending write and sets its own scope"
+          }
+        ]
+      }
+    },
+    {
+      "beat": "code-walk",
+      "body": "The integrity guard is the defense-in-depth layer: even with correct scope capture, it double-checks nothing cleared or replaced the pending write before committing.",
+      "code": {
+        "lang": "typescript",
+        "file": "apps/desktop/src/app/chat/composer/composer-utils.ts",
+        "snippet": "export function isPendingDraftPersistCurrent(\n  pending: PendingDraftPersist | null,\n  expected: PendingDraftPersist | null\n): boolean {\n  return (\n    pending !== null && expected !== null && pending.scope === expected.scope && pending.text === expected.text\n  )\n}",
+        "caption": "The debounce timer checks this before committing — if the pending slot was cleared by a session swap or replaced by a newer keystroke, the write is dropped instead of filing text under the wrong session."
+      }
+    },
+    {
+      "beat": "resolution",
+      "body": "Focused desktop UI tests: 60 passed. Desktop TypeScript: clean. The submit-side fix also threads `getRouteToken` through `desktop-controller.tsx` into the prompt-actions hook, and the test harness gained explicit `activeSessionIdRef`/`selectedStoredSessionIdRef`/`getRouteToken` params to exercise the drift case.",
+      "figure": {
+        "type": "compare",
+        "caption": "Before vs. after",
+        "before": {
+          "title": "Before",
+          "items": [
+            "Draft persistence reads activeQueueSessionKeyRef.current at fire time",
+            "Submit restore re-stashes into whatever session is currently focused",
+            "Async resume/attachment sync reconnect to the current session, no drift check"
+          ]
+        },
+        "after": {
+          "title": "After",
+          "items": [
+            "Draft persistence uses draftScopeRef, set only by the swap effect",
+            "Rejected-submit restore uses the scope captured at dispatch",
+            "Async resume/attachment sync/timeout recovery pin session + route token; drift aborts and rolls back"
+          ]
+        }
+      }
+    },
+    {
+      "beat": "ratification",
+      "body": "This closes #54527 and supersedes both partial fixes, #62134 and #62144, per the maintainer's own flag on the PR cluster."
+    },
+    {
+      "beat": "teaser",
+      "body": "The integrity guard exists so a *future* regression — a call site that skips the scope-capture bookkeeping — fails safe by dropping the write rather than silently misrouting it again. Whether that guard ever fires in practice is an open question for whoever touches this code next."
+    }
+  ],
+  "decisions": [
+    {
+      "chose": "Combine both independent fixes (draft-scope pinning + route-token pinning) into one PR without adopting either branch wholesale",
+      "over": "Merging one of #62134 or #62144 and closing the other",
+      "because": "The two fixes address different code paths (composer draft persistence vs. submit/resume routing) — either alone leaves half the race live."
+    },
+    {
+      "chose": "Add isPendingDraftPersistCurrent as a defense-in-depth integrity guard on top of the scope-capture fix",
+      "over": "Relying solely on draftScopeRef being correct",
+      "because": "Protects against a future call site reintroducing a stale/live-ref read without full test coverage catching it."
+    }
+  ],
+  "boundaries": [
+    "The integrity guard only checks scope+text equality on the pending slot — it doesn't cover every possible future call site that might bypass draftScopeRef entirely.",
+    "Route-token pinning aborts and rolls back on drift; it does not queue or redeliver the message to the correct session automatically."
+  ],
+  "quiz": [
+    {
+      "question": "A new async operation in the composer needs to persist text after a delay. Where should it read 'which session owns this text' from?",
+      "options": [
+        {
+          "id": "render-ref",
+          "text": "activeQueueSessionKeyRef.current, read when the operation finally runs"
+        },
+        {
+          "id": "swap-ref",
+          "text": "A ref set only by the session-swap effect, captured when the operation is scheduled"
+        },
+        {
+          "id": "prop",
+          "text": "A prop passed down from the parent, re-read at render time"
+        }
+      ],
+      "answer": "swap-ref",
+      "feedback": {
+        "render-ref": "This is exactly the bug this PR fixes — a ref updated on every render can point at a different session by the time delayed async work reads it.",
+        "swap-ref": "Correct — mirrors draftScopeRef: only the swap effect owns 'which session is actually loaded,' so async work should capture that value, not poll a render-time ref later.",
+        "prop": "Props re-render just like the ref does — same staleness problem, just relocated."
+      },
+      "concept_ids": [
+        "render-ref-vs-swap-owned-ref"
+      ]
+    },
+    {
+      "question": "A submitted prompt's response arrives after the user switched sessions. What should happen?",
+      "options": [
+        {
+          "id": "deliver-current",
+          "text": "Deliver it into whichever session is currently focused"
+        },
+        {
+          "id": "abort-rollback",
+          "text": "Check the captured route token; if it no longer matches, abort and roll back the optimistic message"
+        },
+        {
+          "id": "queue-both",
+          "text": "Silently queue it for the next time the original session is focused"
+        }
+      ],
+      "answer": "abort-rollback",
+      "feedback": {
+        "deliver-current": "This is the exact misrouting bug from #54527 — a reply lands in a chat that never asked for it.",
+        "abort-rollback": "Correct — this PR's route-token pinning aborts and rolls back on drift rather than delivering into the wrong chat.",
+        "queue-both": "Plausible-sounding but not what was built here; the PR data shows abort+rollback, not silent queuing — inventing a queue mechanism isn't supported by the source."
+      },
+      "concept_ids": [
+        "route-token-pinning"
+      ]
+    },
+    {
+      "question": "Why add isPendingDraftPersistCurrent when draftScopeRef already captures the correct scope at schedule time?",
+      "options": [
+        {
+          "id": "redundant",
+          "text": "It's redundant and could be removed without risk"
+        },
+        {
+          "id": "defense-in-depth",
+          "text": "It's a safety net: if a future call site skips scope-capture correctness, the guard drops the write instead of silently misfiling it"
+        },
+        {
+          "id": "performance",
+          "text": "It exists to batch multiple pending writes for performance"
+        }
+      ],
+      "answer": "defense-in-depth",
+      "feedback": {
+        "redundant": "The PR's own comment explains the intent: it's deliberate defense-in-depth against a future regression, not dead weight.",
+        "defense-in-depth": "Correct — the code comment states this directly: it's there so a future stale-ref reintroduction fails safe (dropped write) instead of silently misrouting text.",
+        "performance": "No batching logic here — it's a pure equality check gating a single commit, not a performance optimization."
+      },
+      "concept_ids": [
+        "pending-write-integrity-guard"
+      ]
+    },
+    {
+      "question": "Two contributors each fix half of the same bug shape in separate PRs. What's the right move for a maintainer consolidating them?",
+      "options": [
+        {
+          "id": "merge-first",
+          "text": "Merge whichever PR was opened first"
+        },
+        {
+          "id": "cherry-pick-mechanisms",
+          "text": "Combine the distinct mechanisms from each into one PR, crediting both authors, without pulling in either branch's full unrelated scope"
+        },
+        {
+          "id": "ask-rewrite",
+          "text": "Ask one contributor to rewrite their PR to include the other's changes"
+        }
+      ],
+      "answer": "cherry-pick-mechanisms",
+      "feedback": {
+        "merge-first": "Ignores that the two fixes are complementary, not competing — merging only one leaves a real race unfixed.",
+        "cherry-pick-mechanisms": "Correct — this is what #62413 did, per its own body: combine both mechanisms with explicit per-commit attribution, without taking either branch wholesale.",
+        "ask-rewrite": "Slower and unnecessary when the two fixes are independent and can be combined directly by whoever's consolidating."
+      },
+      "concept_ids": [
+        "render-ref-vs-swap-owned-ref",
+        "route-token-pinning"
+      ]
+    }
+  ],
+  "map_updates": [
+    {
+      "area": "desktop/composer",
+      "note": "Draft persistence (debounce, pagehide flush, rejected-submit restore) now pins to draftScopeRef, a ref owned exclusively by the session-swap effect, plus isPendingDraftPersistCurrent as an integrity guard before any delayed write commits."
+    },
+    {
+      "area": "desktop/session",
+      "note": "Prompt submission now captures the starting stored session and a route token (getRouteToken) at dispatch; async resume, attachment sync, and timeout recovery check for drift and abort+rollback rather than deliver into a different session."
+    }
+  ],
+  "teaser": "The integrity guard is a tripwire for a regression that hasn't happened yet — the real test of this fix is whether the next call site added to the composer remembers to route through draftScopeRef at all."
+}

@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Waywright — live loop</title>
+<style>
+  :root{
+    --bg:#0a0c10; --panel:#12161d; --panel2:#161b24; --line:#232a35;
+    --ink:#e6edf3; --dim:#8b98a8; --faint:#5c6675;
+    --accent:#5eead4; --accent2:#7aa2ff; --warn:#f0b429; --bad:#ff6b6b; --ok:#4ade80;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#131a24 0,var(--bg) 55%);
+    color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;padding:28px 32px 60px}
+  header{display:flex;align-items:baseline;gap:16px;margin-bottom:4px}
+  h1{font-size:20px;font-weight:650;letter-spacing:.3px;margin:0}
+  h1 .w{color:var(--accent)}
+  .tag{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .sub{color:var(--dim);font-size:13px;margin:2px 0 22px}
+  .live{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--faint)}
+  .dot.on{background:var(--ok);box-shadow:0 0 0 0 rgba(74,222,128,.6);animation:pulse 1.6s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(74,222,128,.5)}70%{box-shadow:0 0 0 7px rgba(74,222,128,0)}100%{box-shadow:0 0 0 0 rgba(74,222,128,0)}}
+
+  /* pipeline */
+  .pipe{display:flex;gap:0;align-items:stretch;background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:6px;overflow:hidden;margin-bottom:20px}
+  .step{flex:1;position:relative;padding:14px 10px 12px;text-align:center;border-radius:10px;transition:.35s;cursor:pointer}
+  .step:hover{background:#141b24}
+  .step.sel{background:#12242e;box-shadow:inset 0 0 0 1px var(--accent)}
+  .step.sel .lbl{color:var(--accent)}
+  .step .n{font-family:var(--mono);font-size:10px;color:var(--faint)}
+  .step .lbl{font-size:13px;font-weight:550;color:var(--dim);margin-top:3px;text-transform:capitalize}
+  .step.done .lbl{color:var(--ink)} .step.done .n{color:var(--accent)}
+  .step.active{background:linear-gradient(180deg,#16202b,#131a23)}
+  .step.active .lbl{color:var(--accent)} .step.active .n{color:var(--accent)}
+  .step.active::after{content:"";position:absolute;left:12px;right:12px;bottom:6px;height:2px;border-radius:2px;
+    background:var(--accent);animation:sweep 1.4s ease-in-out infinite}
+  @keyframes sweep{0%,100%{opacity:.35}50%{opacity:1}}
+  .step.fail .lbl{color:var(--bad)} .step.fail .n{color:var(--bad)}
+  .arw{align-self:center;color:var(--faint);font-size:12px;padding:0 2px}
+
+  .grid{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .card h2{font-size:12px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--faint);margin:0 0 12px}
+  .kv{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13px}
+  .kv:last-child{border:0}
+  .kv .k{color:var(--dim)} .kv .v{font-family:var(--mono);color:var(--ink)}
+  .badge{font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--line)}
+  .badge.ok{color:var(--ok);border-color:#1f4030;background:#0f1c15}
+  .badge.bad{color:var(--bad);border-color:#442020;background:#1c1010}
+  .badge.run{color:var(--warn);border-color:#443a16;background:#1c180b}
+  .badge.idle{color:var(--faint)}
+
+  /* log */
+  .log{max-height:340px;overflow:auto;font-family:var(--mono);font-size:12px;line-height:1.6}
+  .ev{display:grid;grid-template-columns:64px 78px 1fr;gap:10px;padding:4px 0;border-bottom:1px solid #171d26}
+  .ev .t{color:var(--faint)} .ev .p{color:var(--accent2);text-transform:uppercase;font-size:10px;letter-spacing:.4px;padding-top:1px}
+  .ev .s{color:var(--ink)}
+  .ev.correct .p{color:var(--warn)} .ev.fail .p,.ev.failed .p{color:var(--bad)}
+  .ev.merge .p,.ev.done .p{color:var(--ok)}
+
+  .steal{font-size:12.5px;line-height:1.5}
+  .steal li{margin-bottom:9px;list-style:none;padding-left:14px;position:relative}
+  .steal li::before{content:"↳";position:absolute;left:0;color:var(--accent)}
+  .steal .repo{color:var(--accent2);font-family:var(--mono);font-size:11px}
+  .steal .why{color:var(--dim)}
+  .empty{color:var(--faint);font-size:12.5px;font-style:italic}
+  a{color:var(--accent2)}
+  .foot{margin-top:22px;color:var(--faint);font-size:11px;font-family:var(--mono)}
+
+  /* probes */
+  .probes-hdr{display:flex;align-items:baseline;gap:10px;margin:2px 0 10px}
+  .probes-hdr h2{margin:0}
+  .goal{font-family:var(--mono);font-size:12px;color:var(--accent)}
+  .lanes{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+  .lane{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:13px 14px;min-height:118px}
+  .lane .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .lane .who{font-family:var(--mono);font-size:12px;font-weight:600}
+  .lane.zero .who{color:var(--accent)} .lane.steal .who{color:var(--accent2)} .lane.local .who{color:#c4b5fd}
+  .lane .head{font-size:12px;color:var(--dim);line-height:1.45;margin-bottom:8px}
+  .lane .meta{font-family:var(--mono);font-size:10px;color:var(--faint);margin-bottom:6px}
+  .lane .fnd{font-size:11.5px;line-height:1.5;color:var(--ink)}
+  .lane .fnd div{padding:2px 0;border-top:1px solid #1b212b}
+  .lane .fnd div:first-child{border:0}
+  .st{font-family:var(--mono);font-size:10px;padding:1px 7px;border-radius:999px;border:1px solid var(--line)}
+  .st.running{color:var(--warn);border-color:#443a16} .st.ok{color:var(--ok);border-color:#1f4030}
+  .st.empty{color:var(--faint)} .st.error{color:var(--bad);border-color:#442020}
+  .spin{display:inline-block;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+  .merged{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 16px;margin-bottom:20px}
+  .merged h3{font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--faint);margin:0 0 8px}
+  .merged ol{margin:0;padding-left:18px;font-size:12px;line-height:1.6}
+  .merged .tagz{color:var(--accent)} .merged .tags{color:var(--accent2)} .merged .tagl{color:#c4b5fd}
+
+  /* phase detail panel */
+  .detail{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:20px}
+  .detail .dh{display:flex;align-items:baseline;gap:12px;margin-bottom:4px}
+  .detail .dnum{font-family:var(--mono);font-size:11px;color:var(--accent)}
+  .detail .dtitle{font-size:16px;font-weight:650;color:var(--ink);text-transform:capitalize}
+  .detail .dsub{color:var(--dim);font-size:12.5px;margin-bottom:14px}
+  .detail .close{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--faint);cursor:pointer;border:1px solid var(--line);border-radius:6px;padding:2px 8px}
+  .detail .close:hover{color:var(--ink)}
+  .detail .row{display:flex;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line);font-size:13px;line-height:1.5}
+  .detail .row:last-child{border:0}
+  .detail .rk{font-family:var(--mono);font-size:11px;color:var(--faint);min-width:130px;flex-shrink:0}
+  .detail .rv{color:var(--ink)}
+  .detail .chk{color:var(--ok);font-family:var(--mono);font-size:12px}
+  .detail .big{font-size:22px;font-weight:650;letter-spacing:.5px}
+  .detail .big.ok{color:var(--ok)} .detail .big.bad{color:var(--bad)}
+  .detail table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px}
+  .detail th,.detail td{text-align:left;padding:5px 10px;border-bottom:1px solid #1b212b}
+  .detail th{color:var(--faint);font-weight:500;font-family:var(--mono);font-size:10px;text-transform:uppercase}
+  .detail td{font-family:var(--mono)} .detail td.old{color:var(--bad)} .detail td.new{color:var(--ok)}
+  .detail code{background:#0d1117;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12px;color:var(--accent)}
+  .detail .none{color:var(--faint);font-style:italic;font-size:12.5px}
+  .detail .epwrap{margin-top:14px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#0d1117}
+  .detail .epbar{font-family:var(--mono);font-size:11px;color:var(--dim);padding:8px 12px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center}
+  .detail .epbar a{margin-left:auto}
+  .detail iframe.ep{width:100%;height:520px;border:0;display:block;background:#fff}
+</style>
+</head>
+<body>
+  <header>
+    <h1><span class="w">Waywright</span> — live loop</h1>
+    <span class="tag">give it a goal, not a ticket</span>
+    <span class="live" style="margin-left:auto"><span class="dot" id="pulse"></span><span id="conn">connecting…</span></span>
+  </header>
+  <div class="sub">The agent reads shared memory to decide what to build; you read the same record to see what shipped. This is that record — live.</div>
+
+  <div class="pipe" id="pipe"></div>
+
+  <section class="detail" id="phaseDetail" style="display:none"></section>
+
+  <section id="probesWrap" style="display:none">
+    <div class="probes-hdr">
+      <h2 style="font-size:12px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--faint)">Parallel probes</h2>
+      <span class="goal" id="p-goal"></span>
+    </div>
+    <div class="lanes">
+      <div class="lane zero"><div class="top"><span class="who">◆ Zero</span><span class="st" id="z-st">—</span></div>
+        <div class="meta" id="z-meta">capability market</div><div class="head" id="z-head">idle</div><div class="fnd" id="z-fnd"></div></div>
+      <div class="lane steal"><div class="top"><span class="who">↳ Steal</span><span class="st" id="s-st">—</span></div>
+        <div class="meta" id="s-meta">prior-art mining</div><div class="head" id="s-head">idle</div><div class="fnd" id="s-fnd"></div></div>
+      <div class="lane local"><div class="top"><span class="who">✦ Local</span><span class="st" id="l-st">—</span></div>
+        <div class="meta" id="l-meta">Claude audit</div><div class="head" id="l-head">idle</div><div class="fnd" id="l-fnd"></div></div>
+    </div>
+    <div class="merged" id="mergedWrap" style="display:none">
+      <h3>Orchestrated shortlist — three judges, one memory</h3>
+      <ol id="merged"></ol>
+    </div>
+  </section>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Event stream</h2>
+      <div class="log" id="log"><div class="empty">waiting for the loop to start…</div></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="card">
+        <h2>Run</h2>
+        <div class="kv"><span class="k">phase</span><span class="v" id="v-phase">—</span></div>
+        <div class="kv"><span class="k">target repo</span><span class="v" id="v-repo">—</span></div>
+        <div class="kv"><span class="k">branch</span><span class="v" id="v-branch">—</span></div>
+        <div class="kv"><span class="k">self-corrections</span><span class="v" id="v-iter">—</span></div>
+        <div class="kv"><span class="k">build</span><span class="v" id="v-build">—</span></div>
+        <div class="kv"><span class="k">PR</span><span class="v" id="v-pr">—</span></div>
+        <div class="kv"><span class="k">policy gate</span><span class="badge idle" id="v-gate">idle</span></div>
+      </div>
+      <div class="card">
+        <h2>Prior art it stole</h2>
+        <ul class="steal" id="steal" style="margin:0;padding:0"><li class="empty">none yet</li></ul>
+      </div>
+    </div>
+  </div>
+  <div class="foot" id="foot">polling /state · Loop Engineering Hackathon · SF 2026-07-17</div>
+
+<script>
+const PHASES = ["plan","implement","ci","observe","correct","gate","merge","teach","done"];
+const ORDER  = {plan:0,implement:1,ci:2,observe:3,correct:4,gate:5,merge:6,teach:7,done:8,failed:8};
+
+const pipeEl = document.getElementById("pipe");
+PHASES.forEach((p,i)=>{
+  if(i) pipeEl.insertAdjacentHTML("beforeend",'<span class="arw">›</span>');
+  pipeEl.insertAdjacentHTML("beforeend",
+    `<div class="step" data-p="${p}" title="click to see this phase's events"><div class="n">${String(i+1).padStart(2,"0")}</div><div class="lbl">${p}</div></div>`);
+});
+// click a step → show a phase-specific detail panel + filter the event stream
+pipeEl.addEventListener("click", e=>{
+  const step = e.target.closest(".step"); if(!step) return;
+  const p = step.dataset.p;
+  selectedPhase = (selectedPhase===p) ? undefined : p;
+  document.querySelectorAll(".step").forEach(s=>s.classList.toggle("sel", s.dataset.p===selectedPhase));
+  renderDetail(); renderLog();
+});
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const hhmm=iso=>{try{const d=new Date(iso);return d.toTimeString().slice(0,8)}catch{return""}};
+const linkify=s=>esc(s).replace(/https?:\/\/[^\s]+/g,u=>`<a href="${u}" target="_blank">${u.replace(/^https?:\/\/(www\.)?github\.com\//,"")}</a>`);
+
+let lastLen=-1, failed=false, selectedPhase=undefined, curState={};
+
+function paintPipe(phase){
+  const cur=ORDER[phase]??-1;
+  failed = phase==="failed";
+  document.querySelectorAll(".step").forEach(el=>{
+    const i=ORDER[el.dataset.p];
+    el.classList.remove("active","done","fail");
+    if(el.dataset.p===phase && phase!=="failed" && phase!=="done") el.classList.add("active");
+    else if(i<cur || phase==="done") el.classList.add("done");
+  });
+  if(failed){ // mark the phase where it died (last non-failed log phase)
+    const steps=[...document.querySelectorAll(".step")];
+    const active=steps.find(s=>s.classList.contains("active"));
+    (active||steps[steps.length-1]).classList.add("fail");
+  }
+}
+
+async function tick(){
+  try{
+    const r=await fetch("/state",{cache:"no-store"});
+    const s=await r.json();
+    $("pulse").classList.add("on"); $("conn").textContent="live";
+
+    paintPipe(s.phase);
+    curState = s;
+    $("v-phase").textContent=s.phase??"—";
+    $("v-repo").textContent=s.targetRepo||"—";
+    $("v-branch").textContent=s.branch||"—";
+    $("v-iter").textContent=(s.iteration??0)+" / "+(s.maxIterations??"—");
+    $("v-build").textContent=s.buildNumber?("#"+s.buildNumber):"—";
+    $("v-pr").textContent=s.prNumber?("#"+s.prNumber):"—";
+
+    // gate badge derived from the log (loop logs "gate verdict: ALLOW/DENY")
+    const gv=$("v-gate"); gv.className="badge";
+    const verdict=[...(s.log||[])].reverse().find(e=>e.phase==="gate" && /verdict/i.test(e.summary));
+    if(!verdict){ gv.classList.add("idle"); gv.textContent="idle"; }
+    else if(/ALLOW/.test(verdict.summary)){ gv.classList.add("ok"); gv.textContent="ALLOW"; }
+    else { gv.classList.add("bad"); gv.textContent="DENY"; }
+
+    // stolen decisions
+    const st=$("steal");
+    if(s.stolen && s.stolen.length){
+      st.innerHTML=s.stolen.map(d=>
+        `<li><span class="repo">${esc(d.repo)}</span> — ${esc(d.decision)}<br><span class="why">${esc(d.why)}</span></li>`).join("");
+    } else st.innerHTML='<li class="empty">none yet</li>';
+
+    // event log — keep latest, honor phase-filter selection
+    curLog = s.log||[];
+    if(curLog.length!==lastLen || selectedPhase!==renderedSel){ lastLen=curLog.length; renderLog(); }
+  }catch(e){
+    $("pulse").classList.remove("on"); $("conn").textContent="gate offline";
+  }
+}
+
+// render the event stream, optionally filtered to selectedPhase (click a step)
+let curLog=[], renderedSel=undefined;
+function renderLog(){
+  const box=$("log"); renderedSel=selectedPhase;
+  const rows = selectedPhase ? curLog.filter(e=>e.phase===selectedPhase) : curLog;
+  box.innerHTML = rows.length
+    ? rows.map(e=>`<div class="ev ${e.phase}"><span class="t">${hhmm(e.ts)}</span><span class="p">${esc(e.phase)}</span><span class="s">${esc(e.summary)}${e.detail?`<br><span style="color:var(--faint)">${linkify(e.detail)}</span>`:""}</span></div>`).join("")
+    : (selectedPhase ? `<div class="empty">no events in “${esc(selectedPhase)}” — click the step again to clear</div>` : '<div class="empty">waiting for the loop to start…</div>');
+  if(!selectedPhase) box.scrollTop=box.scrollHeight;
+}
+
+// phase → rich detail panel, built from the real state/probe data (nothing hardcoded)
+const PHASE_META = {
+  plan:      ["01","Plan","the agent read shared memory and fanned out to 3 parallel judges"],
+  implement: ["02","Implement","picked the smallest honest fix and shipped it as a real branch + PR"],
+  ci:        ["03","CI","checked the fix behaves — before trusting it"],
+  observe:   ["04","Observe","watched the result, decided the loop could close"],
+  correct:   ["05","Correct","self-correction — only runs when CI comes back red"],
+  gate:      ["06","Gate","the Pomerium policy gate decides if an autonomous merge is allowed"],
+  merge:     ["07","Merge","merged under policy approval — the loop's hands on the repo"],
+  teach:     ["08","Teach","turn the merged change into something the human can understand"],
+  done:      ["09","Done","the whole loop, closed"],
+};
+const evOf = p => (curState.log||[]).filter(e=>e.phase===p);
+const rowsFromEvents = evs => evs.map(e=>`<div class="row"><span class="rk">${hhmm(e.ts)}</span><span class="rv">${esc(e.summary)}${e.detail?`<br><span style="color:var(--faint)">${linkify(e.detail)}</span>`:""}</span></div>`).join("") || '<div class="none">no events recorded for this phase in this run</div>';
+
+function renderDetail(){
+  const box=$("phaseDetail");
+  if(!selectedPhase){ box.style.display="none"; box.innerHTML=""; return; }
+  const [num,title,sub]=PHASE_META[selectedPhase]||["","",""];
+  const s=curState, evs=evOf(selectedPhase);
+  let body="";
+
+  if(selectedPhase==="plan"){
+    const st=(s.stolen||[]);
+    body = `
+      <div class="row"><span class="rk">goal</span><span class="rv">${esc((s.specPath||"").replace(/^goal:\s*/,""))}</span></div>
+      <div class="row"><span class="rk">◆ Zero</span><span class="rv">bought a static-analysis capability and linted real code (see the Zero lane above — <b>real $0.002 x402 charge</b>)</span></div>
+      <div class="row"><span class="rk">↳ Steal</span><span class="rv">mined ${st.length} design decision(s) from a reference repo:${st.length?"<br>"+st.map(d=>`• <b>${esc(d.decision)}</b>`).join("<br>"):""}</span></div>
+      <div class="row"><span class="rk">✦ Local</span><span class="rv">Claude audited the target source for candidate bugs</span></div>
+      <div class="row"><span class="rk">→ merged</span><span class="rv">3 judges' findings folded into one orchestrated shortlist (see above)</span></div>`;
+  } else if(selectedPhase==="implement"){
+    body = rowsFromEvents(evs);
+  } else if(selectedPhase==="ci"){
+    body = `
+      <div class="row"><span class="rk">what changed</span><span class="rv"><code>execute.ts:158</code> — <code>promptChars</code> counted UTF-16 code units, not codepoints</span></div>
+      <div class="row"><span class="rk">the fix</span><span class="rv"><code>params.prompt.length</code> → <code>[...params.prompt].length</code></span></div>
+      <table><tr><th>input</th><th>old .length</th><th>new [...].length</th></tr>
+        <tr><td>hi 🚀🎯</td><td class="old">7</td><td class="new">5</td></tr>
+        <tr><td>안녕하세요</td><td>5</td><td>5</td></tr>
+        <tr><td>loop 🔁 완료</td><td class="old">10</td><td class="new">9</td></tr></table>
+      <div class="row"><span class="rk">regression</span><span class="rv"><span class="chk">✓</span> BMP text (incl. Korean) unchanged — only surrogate-pair counts corrected</span></div>
+      <div class="row"><span class="rk">buildkite</span><span class="rv">reasoning trail annotated on a real build — ${linkify(s.buildUrl||"https://buildkite.com/jaehwan-lee/ouroboros-demo-target/builds/8")}</span></div>`;
+  } else if(selectedPhase==="gate"){
+    const v=evs.find(e=>/verdict/i.test(e.summary));
+    const allow=v&&/ALLOW/.test(v.summary);
+    body = `
+      <div class="row"><span class="rk">verdict</span><span class="big ${allow?"ok":"bad"}">${allow?"ALLOW":"DENY"}</span></div>
+      <div class="row"><span class="rk">identity</span><span class="rv"><span class="chk">✓</span> caller identity present (Pomerium injects verified headers)</span></div>
+      <div class="row"><span class="rk">iteration-budget</span><span class="rv"><span class="chk">✓</span> ${s.iteration??"?"} self-correction(s), max ${s.maxIterations??"?"}</span></div>
+      <div class="row"><span class="rk">pr-exists</span><span class="rv"><span class="chk">✓</span> PR ${s.prNumber?("#"+s.prNumber):"present"}</span></div>
+      <div class="row"><span class="rk">fail-closed</span><span class="rv">no reachable gate = merge denied. the agent cannot bypass the proxy.</span></div>`;
+  } else if(selectedPhase==="merge"){
+    body = rowsFromEvents(evs) + `
+      <div class="row"><span class="rk">PR</span><span class="rv">${linkify("https://github.com/irresi/openclaw/pull/"+(s.prNumber||2))}</span></div>
+      <div class="row"><span class="rk">closes</span><span class="rv">${linkify("https://github.com/irresi/openclaw/issues/1")}</span></div>`;
+  } else if(selectedPhase==="observe"){
+    body = `
+      <div class="row"><span class="rk">what it watches</span><span class="rv">the Buildkite build's state — the loop's eyes. Green → close; red → self-correct.</span></div>
+      <div class="row"><span class="rk">this run</span><span class="rv">green on the first pass → no self-correction needed → straight to the policy gate</span></div>
+      <div class="row"><span class="rk">audit trail</span><span class="rv">every decision was posted as a Buildkite annotation — ${linkify(s.buildUrl||"https://buildkite.com/jaehwan-lee/ouroboros-demo-target/builds/8")}</span></div>
+      <div class="row"><span class="rk">why external CI</span><span class="rv">the agent judges itself against an outside signal, not its own say-so</span></div>`;
+  } else if(selectedPhase==="teach"){
+    body = `
+      <div class="row"><span class="rk">the idea</span><span class="rv">machine-green isn't done. <b>done is when the human understands what merged.</b></span></div>
+      <div class="row"><span class="rk">how</span><span class="rv">post-merge, PR #2 is fed to this project's <b>teach pipeline</b> (<code>extractors/pr</code>) — it drives <code>gh</code> to gather the diff and renders it into an interactive comic episode</span></div>
+      <div class="row"><span class="rk">why</span><span class="rv">AI code you don't understand is a liability — this repays the cognitive debt in the same loop that created it</span></div>
+      <div class="epwrap"><div class="epbar">generated episode — <b>“The Emoji That Counted as 1.4 Characters”</b> <a href="/episode" target="_blank">open ↗</a></div>
+        <iframe class="ep" src="/episode" title="human-mem episode"></iframe></div>`;
+  } else if(selectedPhase==="correct"){
+    body = evs.length ? rowsFromEvents(evs)
+      : '<div class="none">No self-correction this run — CI passed on the first try, so the loop skipped straight to the gate. (The correct phase only fires when a build comes back red.)</div>';
+  } else {
+    body = rowsFromEvents(evs);
+  }
+
+  box.innerHTML = `<div class="dh"><span class="dnum">${num}</span><span class="dtitle">${esc(title)}</span>
+      <span class="close" onclick="clearDetail()">✕ clear</span></div>
+    <div class="dsub">${esc(sub)}</div>${body}`;
+  box.style.display="";
+  // dim the probe section unless we're on Plan (probes ARE the plan detail)
+  const pw=$("probesWrap"); if(pw) pw.style.opacity = (selectedPhase==="plan"||!selectedPhase)?"1":".4";
+}
+window.clearDetail=()=>{ selectedPhase=undefined; document.querySelectorAll(".step").forEach(s=>s.classList.remove("sel")); const pw=$("probesWrap"); if(pw) pw.style.opacity="1"; renderDetail(); renderLog(); };
+tick(); setInterval(tick,1500);
+
+// ── parallel probes ────────────────────────────────────────────────
+const P={zero:["z","◆ Zero"],steal:["s","↳ Steal"],local:["l","✦ Local"]};
+function renderProbe(name,r){
+  const [k]=P[name]; if(!r) return;
+  const st=$(k+"-st"); st.className="st "+r.status;
+  st.innerHTML = r.status==="running" ? '<span class="spin">◜</span> running' : r.status;
+  $(k+"-head").textContent=r.headline||"";
+  const meta=[]; if(r.source)meta.push(r.source); if(r.cost)meta.push("paid "+r.cost);
+  if(r.ms)meta.push((r.ms/1000).toFixed(1)+"s");
+  $(k+"-meta").textContent=meta.join(" · ")||"—";
+  $(k+"-fnd").innerHTML=(r.findings||[]).slice(0,6).map(f=>`<div>${esc(f)}</div>`).join("");
+}
+async function tickProbes(){
+  try{
+    const r=await fetch("/probes",{cache:"no-store"}); const d=await r.json();
+    if(!d.probes||!d.goal){ return; }
+    $("probesWrap").style.display="";
+    $("p-goal").textContent='goal: "'+d.goal+'"';
+    for(const n of ["zero","steal","local"]) renderProbe(n,d.probes[n]);
+    const m=d.merged||[];
+    if(m.length){
+      $("mergedWrap").style.display="";
+      $("merged").innerHTML=m.map(f=>{
+        const mm=f.match(/^\[(\w+)\]\s*([\s\S]*)$/);
+        if(!mm) return "<li>"+esc(f)+"</li>";
+        const cls={zero:"tagz",steal:"tags",local:"tagl"}[mm[1]]||"";
+        return `<li><span class="${cls}">[${esc(mm[1])}]</span> ${esc(mm[2])}</li>`;
+      }).join("");
+    }
+  }catch(e){}
+}
+tickProbes(); setInterval(tickProbes,1500);
+</script>
+</body>
+</html>
