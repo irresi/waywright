@@ -1,0 +1,4 @@
+node_modules/
+.ouroboros/
+target/
+*.log

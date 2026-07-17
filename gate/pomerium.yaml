@@ -1,0 +1,15 @@
+# Pomerium config — identity-aware policy in front of the merge gate.
+# The agent must pass this proxy to request merge approval. deny always wins.
+routes:
+  - from: https://gate.localhost.pomerium.io
+    to: http://localhost:8081
+    policy:
+      - allow:
+          and:
+            - domain:
+                is: gmail.com          # only the operator's identity domain
+      - deny:
+          or:
+            - claim/groups: "untrusted-agents"
+    timeout: 10s
+    pass_identity_headers: true         # gate/server.ts reads x-pomerium-claim-email
