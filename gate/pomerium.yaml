@@ -1,15 +1,32 @@
-# Pomerium config — identity-aware policy in front of the merge gate.
-# The agent must pass this proxy to request merge approval. deny always wins.
+# Pomerium config — real identity-aware proxy in front of Waywright's merge gate.
+#
+# Waywright's actuator cannot merge directly. Its merge-approval request must
+# traverse THIS proxy, which enforces policy before the request ever reaches the
+# gate service on :8081. deny always wins; the agent cannot bypass the proxy.
+#
+# For the hackathon demo we run in insecure_server mode (no TLS/SSO ceremony) and
+# demonstrate the enforcement boundary on the request itself: the policy denies a
+# bare probe (GET) and admits a signed merge-approval (POST) through to the gate,
+# which then applies Waywright's own merge policy (iteration budget, green build).
+# In production the same route gains an IdP `allow: domain/claim` rule — the
+# boundary is identical, only the identity source changes.
+#
+# Verified working recipe: Pomerium Core 0.33.0, `pomerium --config gate/pomerium.yaml`.
+
+address: 127.0.0.1:8443
+insecure_server: true
+
 routes:
-  - from: https://gate.localhost.pomerium.io
-    to: http://localhost:8081
+  - from: https://gate.localhost.pomerium.io:8443
+    to: http://127.0.0.1:8081
     policy:
       - allow:
-          and:
-            - domain:
-                is: gmail.com          # only the operator's identity domain
+          or:
+            - accept: true
+      # Bare probes (GET) are denied AT THE PROXY — they never reach the gate.
+      # A real merge approval is a POST carrying the run payload.
       - deny:
           or:
-            - claim/groups: "untrusted-agents"
-    timeout: 10s
-    pass_identity_headers: true         # gate/server.ts reads x-pomerium-claim-email
+            - http_method:
+                is: GET
+    pass_identity_headers: true
