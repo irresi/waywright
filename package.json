@@ -7,16 +7,13 @@
     "navigate": "bun run src/waywright.ts",
     "execute": "bun run src/execute.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "teach": "bun extractors/pr/extract.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"
-  },
-  "scripts": {
-    "test": "bun test tests/core.test.ts",
-    "teach": "bun extractors/pr/extract.ts"
   }
 }
