@@ -5,7 +5,16 @@
 //
 // Source of truth is probes.final.json (the actual probe run). We re-emit it
 // paced; nothing here is fabricated — it's the real run, replayed for the camera.
-import type { LoopState, LoopEvent, Phase } from "./types";
+// Replay-local view types. The loop's runtime types were refactored out of
+// ./types during the in-tree teach merge; replay drives the dashboard JSON
+// directly, so it owns the minimal shape it writes.
+type Phase = "plan" | "implement" | "ci" | "observe" | "gate" | "merge" | "teach" | "done";
+type LoopEvent = { ts: string; phase: Phase; summary: string; detail?: string };
+type LoopState = {
+  phase: Phase; specPath: string; targetRepo: string; branch: string;
+  iteration: number; maxIterations: number; log: LoopEvent[]; stolen: unknown[];
+  prNumber?: number; buildNumber?: number;
+};
 
 const STATE = process.env.OUROBOROS_STATE ?? ".ouroboros/state.json";
 const PROBES = process.env.PROBE_OUT ?? ".ouroboros/probes.json";
@@ -24,7 +33,7 @@ const state: LoopState = {
 };
 
 // ── probe view (top half), rebuilt each tick ────────────────────────
-type PV = { probe: string; status: string; headline: string; detail?: string; findings?: string[]; cost?: string; source?: string; ms?: number };
+type PV = { probe?: string; status?: string; headline?: string; detail?: string; findings?: string[]; cost?: string; source?: string; ms?: number };
 const probes: { goal: string; target: string; startedAt: string; probes: Record<string, PV>; merged: string[] } = {
   goal, target: real.target, startedAt: new Date().toISOString(),
   probes: {
