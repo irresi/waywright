@@ -2,3 +2,4 @@ node_modules/
 .waywright/
 target/
 *.log
+.ouroboros/
