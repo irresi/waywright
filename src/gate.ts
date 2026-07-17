@@ -3,7 +3,8 @@
 // an identity-aware PPL policy before it is allowed to merge its own PR.
 // deny always wins; the agent cannot bypass the proxy.
 
-const GATE_URL = process.env.GATE_URL ?? "http://localhost:8081/gate/merge";
+// read lazily so runtime env changes (tests, demo re-pointing) take effect
+const gateUrl = () => process.env.GATE_URL ?? "http://localhost:8081/gate/merge";
 
 export interface GateVerdict {
   allowed: boolean;
@@ -15,7 +16,7 @@ export async function requestMergeApproval(payload: {
   repo: string; pr: number; iterations: number; buildUrl: string;
 }): Promise<GateVerdict> {
   try {
-    const res = await fetch(GATE_URL, {
+    const res = await fetch(gateUrl(), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
