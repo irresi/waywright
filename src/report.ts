@@ -166,7 +166,9 @@ function renderMemoryWritten(memory?: EngineeringMemoryRecord): string {
 }
 
 export function renderWaywrightReport(model: WaywrightReportModel): string {
-  const { navigation, actuation, memoryWritten } = model;
+  const { actuation, memoryWritten } = model;
+  // Normalize: tolerate navigation.json written before the memory field existed.
+  const navigation = { ...model.navigation, memory: model.navigation.memory ?? [] };
   const runStatus = actuation?.status.toUpperCase() ?? "NAVIGATED";
   return `<!doctype html>
 <html lang="en">
